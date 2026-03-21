@@ -1,7 +1,7 @@
 ---
 name: search-docs
 description: |
-  Look up documentation for any library or tool. Use this when the user asks to look up docs, check an API, or asks how to use a library. Trigger phrases: "look up docs for", "check the X docs", "how do I use X", "/search-docs". Uses WebFetch/curl against official docs.
+  Look up documentation for any library or tool. Use this when the user asks to look up docs, check an API, or asks how to use a library. Trigger phrases: "look up docs for", "check the X docs", "how do I use X", "/search-docs". Uses `WebFetch`/`WebSearch` tools; falls back to `Bash` (curl) if WebFetch is unavailable.
 argument-hint: "(query) [library-name]"
 ---
 
@@ -11,11 +11,12 @@ Look up documentation for the query in `$ARGUMENTS`. Parse out the library name 
 
 ## Lookup Strategy
 
-1. Use `WebFetch` against the library's official docs URL.
-2. If WebFetch is unavailable or times out, use `curl -sL` via Bash.
-3. If the docs URL is unknown, use `WebSearch` to find it first.
+1. **Resolve the URL** — if the official docs URL is unknown, use `WebSearch` to find it first (up to 2 searches). If no authoritative URL is found after 2 searches, tell the user and stop.
+2. **Fetch with `WebFetch`** — use the resolved URL.
+3. **Fallback to curl** — if `WebFetch` is unavailable or times out, use the `Bash` tool to run `curl -sL [url]`.
+4. **Give up cleanly** — if no authoritative source can be retrieved after the above steps, tell the user clearly and stop. Do not guess or fabricate API details.
 
-Never fabricate versions, API signatures, or behavior. Say so if authoritative docs cannot be found.
+Never fabricate versions, API signatures, or behavior.
 
 ## Output
 
@@ -47,6 +48,8 @@ Claude: Fetches the Polly (.NET) docs, returns the `RetryPolicy` API with a conf
 
 ## Troubleshooting
 
-- **WebFetch blocked or times out:** Fall back to `curl -sL [url]` via Bash.
-- **Docs URL unknown:** Use WebSearch to find the official docs URL, then WebFetch it.
-- **No authoritative source found:** Tell the user clearly — do not guess or fabricate API details.
+| Symptom | Fix |
+|---|---|
+| WebFetch blocked or times out | Use the `Bash` tool to run `curl -sL [url]` as fallback |
+| Docs URL unknown | Use `WebSearch` to find the official docs URL, then `WebFetch` it |
+| No authoritative source found after 2 searches | Tell the user clearly — do not guess or fabricate API details |

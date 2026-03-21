@@ -33,7 +33,7 @@ Use `Glob` to find all in-scope files. Print the file count before proceeding:
 
 ## Step 2 — Audit Python Files
 
-For each `.py` file, read it and check every rule below. Record each violation with **file path**, **line number**, and a **one-line description**.
+For each `.py` file, use `Read` to load it and check every rule below. Record each violation with **file path**, **line number**, and a **one-line description**.
 
 ### Python Rules
 
@@ -52,7 +52,7 @@ For each `.py` file, read it and check every rule below. Record each violation w
 
 ## Step 3 — Audit C# Files
 
-For each `.cs` file, read it and check every rule below.
+For each `.cs` file, use `Read` to load it and check every rule below.
 
 ### C# Rules
 

@@ -10,8 +10,7 @@ script_dir = Path(__file__).parent.resolve()
 home = Path.home()
 
 destinations = [
-    home / ".claude" / "skills",
-    home / ".cursor" / "skills",
+    home / ".claude" / "skills"
 ]
 
 for dest in destinations:
@@ -28,4 +27,4 @@ for dest in destinations:
             print(f"  {GREEN}Installing{RESET} {skill.name}")
         shutil.copytree(skill, target)
 
-print("\nDone. Skills installed to ~/.claude/skills/ and ~/.cursor/skills/.")
+print("\nSkills installed")

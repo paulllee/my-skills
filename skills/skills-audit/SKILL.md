@@ -27,7 +27,7 @@ Use `Glob` to find all `skills/*/SKILL.md` files. Print the count before proceed
 
 ## Step 2 — Audit Each Skill
 
-For each `SKILL.md`, read it and evaluate all four pillars below.
+For each `SKILL.md`, use `Read` to load it and evaluate all four pillars below.
 
 ### Pillar 1 — Structural Integrity
 
@@ -115,8 +115,27 @@ If a skill passes all pillars, output a single `[PASS] All pillars pass.` line f
 
 **Example 1 — Full audit**
 User: `/skills-audit`
-Claude: Globs all `skills/*/SKILL.md`, audits each against all four pillars, prints a grouped violation report.
+Claude: Globs all `skills/*/SKILL.md`, audits each against all four pillars, prints a grouped violation report:
+```
+### search-docs
+
+#### Pillar 1 — Structural Integrity
+[PASS] Folder is kebab-case, file is named SKILL.md, no README present.
+
+#### Pillar 4 — Design Pattern
+[OBSERVE] Conditional branching pattern — not a standard Sequential Orchestration.
+> Suggested fix: Renumber lookup steps explicitly so branching logic is unambiguous.
+```
 
 **Example 2 — Single skill**
 User: `/skills-audit fire-plan`
 Claude: Reads only `skills/fire-plan/SKILL.md`, reports pass/fail per pillar.
+
+**Example 3 — Skill with a violation**
+User: `/skills-audit search-docs`
+Claude: Reads `skills/search-docs/SKILL.md`, finds the Troubleshooting section uses a bullet list instead of a table, and reports:
+```
+#### Pillar 3 — Instructional Quality
+[IMPROVE] Troubleshooting section is a bullet list, not a table.
+> Suggested fix: Convert to a | Symptom | Fix | two-column table.
+```
