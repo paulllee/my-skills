@@ -22,14 +22,16 @@ Stay in ask mode. Do not write any code or propose solutions yet.
 2. Create `docs/fire-plan/{slug}/` — this directory is used for all artifacts in this run.
 3. Create a task for each phase using `TaskCreate`: Phase 1 Research, Phase 2 Propose, Phase 3 Plan, Phase 4 Tests, Phase 5 Implement, Phase 6 Verify, Phase 7 Audit, Phase 8 Benchmarks, Phase 9 Wrap-up. Mark Phase 1 as `in_progress`.
 4. Deep-read all files relevant to the task using `Glob`/`Grep` for discovery, `Read` for deep reading, and `Agent` (subagent_type `Explore`) for broad codebase searches. Skim is not acceptable. If the task involves external libraries or APIs, use the `search-docs` skill (which uses `WebSearch`/`WebFetch` internally) to look up authoritative documentation before forming conclusions.
-5. Write findings to `docs/fire-plan/{slug}/research.md`. The file must include:
+5. Scan prior runs for relevant lessons: `Glob docs/fire-plan/*/plan.md`, then for each result `Grep` for a `## Lessons` section and skim its contents. If any lesson is relevant to the current task, carry it forward into `research.md` under a `## Prior Lessons` heading.
+6. Write findings to `docs/fire-plan/{slug}/research.md`. The file must include:
    - What the affected system does and how it works
    - All relevant files and their responsibilities
    - Existing patterns, conventions, and constraints
    - Potential gotchas or integration risks
-6. Mark the Phase 1 task as `completed` via `TaskUpdate`.
-7. **Stop and tell the user:** "Research complete. Review `docs/fire-plan/{slug}/research.md` and reply to continue."
-8. Wait for explicit user confirmation before proceeding.
+   - Prior lessons (if any were found in step 5)
+7. Mark the Phase 1 task as `completed` via `TaskUpdate`.
+8. **Stop and tell the user:** "Research complete. Review `docs/fire-plan/{slug}/research.md` and reply to continue."
+9. Wait for explicit user confirmation before proceeding.
 
 ---
 
