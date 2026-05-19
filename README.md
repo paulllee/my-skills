@@ -6,7 +6,7 @@ The goal is to front-load thinking — plan before code, audit before merge — 
 
 ## Skills
 
-- **fire-plan** — disciplined agentic workflow: research → proposals → human approval → implementation
+- **map** — disciplined agentic workflow: research → proposals → human approval → implementation
 - **code-audit** — static audit of Python/C# source against coding standards
 - **skills-audit** — quality audit of skills in this repo
 - **search-docs** — look up documentation for any library or tool

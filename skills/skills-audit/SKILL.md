@@ -93,7 +93,7 @@ Output one section per skill, grouped by pillar. Use this format:
 
 ---
 
-### fire-plan
+### map
 ...
 ```
 
@@ -128,8 +128,8 @@ Claude: Globs all `skills/*/SKILL.md`, audits each against all four pillars, pri
 ```
 
 **Example 2 — Single skill**
-User: `/skills-audit fire-plan`
-Claude: Reads only `skills/fire-plan/SKILL.md`, reports pass/fail per pillar.
+User: `/skills-audit map`
+Claude: Reads only `skills/map/SKILL.md`, reports pass/fail per pillar.
 
 **Example 3 — Skill with a violation**
 User: `/skills-audit search-docs`
