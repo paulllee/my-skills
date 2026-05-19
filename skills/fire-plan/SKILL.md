@@ -10,7 +10,7 @@ A cost-effective, single-session agentic workflow. The core rule: **no code is w
 
 Overall, prefer tool calls over shell commands. No git commits. Plain text output only.
 
-> All references to `research.md` and `plan.md` mean files inside the run directory `docs/fire-plan/{slug}/` created at the start of Phase 1.
+> All references to `research.md` and `plan.md` mean files inside the run directory `~/.claude/docs/{project}/{slug}/` created at the start of Phase 1. This location is outside any worktree so docs persist and are accessible across all worktrees of the same project.
 
 ---
 
@@ -19,19 +19,22 @@ Overall, prefer tool calls over shell commands. No git commits. Plain text outpu
 Stay in ask mode. Do not write any code or propose solutions yet.
 
 1. Derive a short kebab-case slug from the task description (e.g. `add-pagination`, `fix-scheduler`, `auth-rewrite`).
-2. Create `docs/fire-plan/{slug}/` — this directory is used for all artifacts in this run.
-3. Create a task for each phase using `TaskCreate`: Phase 1 Research, Phase 2 Propose, Phase 3 Plan, Phase 4 Tests, Phase 5 Implement, Phase 6 Verify, Phase 7 Audit, Phase 8 Benchmarks, Phase 9 Wrap-up. Mark Phase 1 as `in_progress`.
-4. Deep-read all files relevant to the task using `Glob`/`Grep` for discovery, `Read` for deep reading, and `Agent` (subagent_type `Explore`) for broad codebase searches. Skim is not acceptable. If the task involves external libraries or APIs, use the `search-docs` skill (which uses `WebSearch`/`WebFetch` internally) to look up authoritative documentation before forming conclusions.
-5. Scan prior runs for relevant lessons: `Glob docs/fire-plan/*/plan.md`, then for each result `Grep` for a `## Lessons` section and skim its contents. If any lesson is relevant to the current task, carry it forward into `research.md` under a `## Prior Lessons` heading.
-6. Write findings to `docs/fire-plan/{slug}/research.md`. The file must include:
+2. Derive `{project}`: run `git rev-parse --show-toplevel` and take the `basename` of the result. If not in a git repo, use the basename of the current working directory.
+3. Create the run directory `~/.claude/docs/{project}/{slug}/` — all artifacts for this run go here.
+4. **Ask the user:** "Would you like to run implementation in an isolated git worktree? This keeps changes off your current branch until you're ready to merge." Wait for their yes/no answer and record their choice (stored as `worktree: true/false` in `research.md` front matter later).
+5. Create a task for each phase using `TaskCreate`: Phase 1 Research, Phase 2 Propose, Phase 3 Plan, Phase 4 Tests, Phase 5 Implement, Phase 6 Verify, Phase 7 Audit, Phase 8 Benchmarks, Phase 9 Wrap-up. Mark Phase 1 as `in_progress`.
+6. Deep-read all files relevant to the task using `Glob`/`Grep` for discovery, `Read` for deep reading, and `Agent` (subagent_type `Explore`) for broad codebase searches. Skim is not acceptable. If the task involves external libraries or APIs, use the `search-docs` skill (which uses `WebSearch`/`WebFetch` internally) to look up authoritative documentation before forming conclusions.
+7. Scan prior runs for relevant lessons: `Glob ~/.claude/docs/{project}/*/plan.md`, then for each result `Grep` for a `## Lessons` section and skim its contents. If any lesson is relevant to the current task, carry it forward into `research.md` under a `## Prior Lessons` heading.
+8. Write findings to `~/.claude/docs/{project}/{slug}/research.md`. The file must include:
+   - `worktree: true` or `worktree: false` at the top (from the user's answer in step 4)
    - What the affected system does and how it works
    - All relevant files and their responsibilities
    - Existing patterns, conventions, and constraints
    - Potential gotchas or integration risks
-   - Prior lessons (if any were found in step 5)
-7. Mark the Phase 1 task as `completed` via `TaskUpdate`.
-8. **Stop and tell the user:** "Research complete. Review `docs/fire-plan/{slug}/research.md` and reply to continue."
-9. Wait for explicit user confirmation before proceeding.
+   - Prior lessons (if any were found in step 7)
+9. Mark the Phase 1 task as `completed` via `TaskUpdate`.
+10. **Stop and tell the user:** "Research complete. Review `~/.claude/docs/{project}/{slug}/research.md` and reply to continue."
+11. Wait for explicit user confirmation before proceeding.
 
 ---
 
@@ -40,7 +43,7 @@ Stay in ask mode. Do not write any code or propose solutions yet.
 Stay in ask mode. Do not write any code.
 
 1. Mark the Phase 2 task as `in_progress` via `TaskUpdate`.
-2. Generate **2–3 distinct approaches** and write them to `docs/fire-plan/{slug}/plan.md`. Each approach must include:
+2. Generate **2–3 distinct approaches** and write them to `~/.claude/docs/{project}/{slug}/plan.md`. Each approach must include:
    - A short title and one-sentence summary
    - Key implementation steps (bullet points)
    - Pros and cons
@@ -48,7 +51,7 @@ Stay in ask mode. Do not write any code.
 3. End the file with a blank `## Decision` section for the human to fill in.
 4. Mark the Phase 2 task as `completed` via `TaskUpdate`.
 
-**Stop and tell the user:** "Here are your options in `docs/fire-plan/{slug}/plan.md`. Pick one (or add inline notes) and reply with your choice."
+**Stop and tell the user:** "Here are your options in `~/.claude/docs/{project}/{slug}/plan.md`. Pick one (or add inline notes) and reply with your choice."
 
 > The user may annotate `plan.md` directly — corrections, constraints, rejected sections. If they do, re-read the file, address all notes, update the plan, and ask again. Repeat up to 3 times. Always include `"don't implement yet"` in your own internal guard.
 
@@ -74,6 +77,7 @@ Once the human has chosen an approach:
 ## Phase 4 — Tests First
 
 1. Mark the Phase 4 task as `in_progress` via `TaskUpdate`.
+2. **If the user opted into a worktree** (check `worktree:` in `research.md`): call `EnterWorktree` now to isolate all code changes from this point forward. Note the worktree path in `plan.md` under `## Worktree`.
 
 Write failing tests **before any implementation code**. Do not make them pass yet.
 
@@ -83,7 +87,7 @@ Write failing tests **before any implementation code**. Do not make them pass ye
 - Run the test suite and confirm all new tests **fail** for the right reason
 - Append test file paths to the `## Todo` checklist in `plan.md` and create corresponding child tasks via `TaskCreate`
 
-2. Mark the Phase 4 task as `completed` via `TaskUpdate`.
+3. Mark the Phase 4 task as `completed` via `TaskUpdate`.
 
 ---
 
@@ -146,9 +150,10 @@ Skip this phase (and mark its task `completed`) only if the plan's performance c
 
 1. Mark the Phase 9 task as `in_progress` via `TaskUpdate`.
 2. Mark the plan status at the top of `plan.md`: `**Status: DONE ✓**`
-3. Append a brief `## Lessons` section to `plan.md` with anything non-obvious learned during implementation
-4. Mark the Phase 9 task as `completed` via `TaskUpdate`.
-5. Print a short summary to the human: what was built, test results, benchmark results (if run), any open items
+3. Append a brief `## Lessons` section to `plan.md` with anything non-obvious learned during implementation.
+4. **If running in a worktree** (check `## Worktree` in `plan.md`): call `ExitWorktree` to return to the main tree. Summarize any merge steps the human needs to take.
+5. Mark the Phase 9 task as `completed` via `TaskUpdate`.
+6. Print a short summary to the human: what was built, test results, benchmark results (if run), worktree merge instructions (if applicable), any open items.
 
 ---
 
@@ -159,7 +164,7 @@ Skip this phase (and mark its task `completed`) only if the plan's performance c
 | Tests pass before any implementation | The tests are testing the wrong thing — re-read them and fix assertions |
 | Plan mode produces a generic plan | Add more detail to `research.md` and re-run Phase 2 before entering plan mode |
 | Implementation drifts from the plan | Stop, revert with `git checkout .`, narrow scope in `plan.md`, restart Phase 5 |
-| Context window fills up mid-session | Point Claude back to `plan.md` and `research.md` — they survive compaction |
+| Context window fills up mid-session | Point Claude back to `~/.claude/docs/{project}/{slug}/plan.md` and `research.md` — they survive compaction and are accessible from any worktree |
 | Benchmark is slower than threshold | Do not tune blindly — profile first, identify the bottleneck, propose a fix to the human |
 
 ---
@@ -168,11 +173,11 @@ Skip this phase (and mark its task `completed`) only if the plan's performance c
 
 **Example 1 — New feature**
 > User: `/fire-plan add keyset pagination to the /posts endpoint`
-> Claude: Reads the posts controller, ORM layer, and existing pagination. Writes `research.md`. Waits. Then writes 3 approaches to `plan.md` (offset, keyset, hybrid). Waits for human to pick. Enters plan mode. Writes failing tests. Implements. Runs tests. Benchmarks query time vs. the 50ms threshold in the plan.
+> Claude: Derives project name `my-api`, slug `add-keyset-pagination`. Asks about worktree — user says yes. Reads the posts controller, ORM layer, and existing pagination. Writes `~/.claude/docs/my-api/add-keyset-pagination/research.md`. Waits. Then writes 3 approaches to `plan.md` (offset, keyset, hybrid). Waits for human to pick. Enters plan mode. Calls `EnterWorktree`. Writes failing tests. Implements. Runs tests. Benchmarks query time vs. the 50ms threshold in the plan. Calls `ExitWorktree`.
 
 **Example 2 — Bug fix**
 > User: `fire-plan: the task scheduler is running cancelled tasks`
-> Claude: Traces the scheduler, cancellation flow, and queue consumer. Writes `research.md` documenting where cancellation state is checked (and missed). Proposes 2 fixes. Waits. Implements the chosen fix behind a failing regression test first.
+> Claude: Derives project `my-app`, slug `fix-scheduler-cancelled-tasks`. Asks about worktree — user says no. Traces the scheduler, cancellation flow, and queue consumer. Writes `research.md` documenting where cancellation state is checked (and missed). Proposes 2 fixes. Waits. Implements the chosen fix behind a failing regression test first.
 
 **Example 3 — Refactor**
 > User: `let's fire-plan the auth middleware rewrite`
