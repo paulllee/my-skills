@@ -1,0 +1,4 @@
+interface:
+  display_name: "map"
+  short_description: "plan, code, and check a coding task"
+  default_prompt: "use $map to plan and finish this coding task with my approval"

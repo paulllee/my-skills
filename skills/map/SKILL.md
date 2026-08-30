@@ -1,184 +1,52 @@
 ---
 name: map
-description: |
-  Runs a disciplined, single-session agentic workflow: deep research → 2-3 written proposals → human picks one → plan mode fills the todo list → failing tests → implementation → tests pass → stopwatch benchmarks. Never writes code before the human approves a plan. Trigger phrases: "/map", "let's map this", "use map for", "map: [task]".
+description: plan coding work with choices, tests, checks, and human review. use when the user asks to map a task
 ---
 
-# map
+## files
 
-A cost-effective, single-session agentic workflow. The core rule: **no code is written until the human has approved a written plan.**
+keep each map in `~/.maps/{project}/{slug}`. use the repo name for `project` and a short kebab-case task name for `slug`. keep all plans, notes, checks, and handoff files there. do not commit or push unless the user asks
 
-Overall, prefer tool calls over shell commands. No git commits. Plain text output only.
+## start
 
-> All references to `research.md` and `plan.md` mean files inside the run directory `~/.maps/{project}/{slug}/` created at the start of Phase 1. This location is outside any worktree so docs persist and are accessible across all worktrees of the same project.
+ask if the user wants a new git worktree. write the task, repo, branch, worktree choice, state, and short phase list to `run.md`. wait to make the worktree until coding starts
 
----
+## research
 
-## Phase 1 — Research (Ask Mode)
+read the code, tests, settings, repo rules, useful past maps, and official docs when current behavior matters. write only useful facts, files, rules, risks, and past lessons to `research.md`. do not pick a fix yet
 
-Stay in ask mode. Do not write any code or propose solutions yet.
+## choices
 
-1. Derive a short kebab-case slug from the task description (e.g. `add-pagination`, `fix-scheduler`, `auth-rewrite`).
-2. Derive `{project}`: run `git rev-parse --show-toplevel` and take the `basename` of the result. If not in a git repo, use the basename of the current working directory.
-3. Create the run directory `~/.maps/{project}/{slug}/` — all artifacts for this run go here.
-4. **Ask the user:** "Would you like to run implementation in an isolated git worktree? This keeps changes off your current branch until you're ready to merge." Wait for their yes/no answer and record their choice (stored as `worktree: true/false` in `research.md` front matter later).
-5. Create a task for each phase using `TaskCreate`: Phase 1 Research, Phase 2 Propose, Phase 3 Plan, Phase 4 Tests, Phase 5 Implement, Phase 6 Verify, Phase 7 Audit, Phase 8 Benchmarks, Phase 9 Wrap-up. Mark Phase 1 as `in_progress`.
-6. Deep-read all files relevant to the task using `Glob`/`Grep` for discovery, `Read` for deep reading, and `Agent` (subagent_type `Explore`) for broad codebase searches. Skim is not acceptable. If the task involves external libraries or APIs, use the `search-docs` skill (which uses `WebSearch`/`WebFetch` internally) to look up authoritative documentation before forming conclusions.
-7. Scan prior runs for relevant lessons: `Glob ~/.maps/{project}/*/plan.md`, then for each result `Grep` for a `## Lessons` section and skim its contents. If any lesson is relevant to the current task, carry it forward into `research.md` under a `## Prior Lessons` heading.
-8. Write findings to `~/.maps/{project}/{slug}/research.md`. The file must include:
-   - `worktree: true` or `worktree: false` at the top (from the user's answer in step 4)
-   - What the affected system does and how it works
-   - All relevant files and their responsibilities
-   - Existing patterns, conventions, and constraints
-   - Potential gotchas or integration risks
-   - Prior lessons (if any were found in step 7)
-9. Mark the Phase 1 task as `completed` via `TaskUpdate`.
-10. **Stop and tell the user:** "Research complete. Review `~/.maps/{project}/{slug}/research.md` and reply to continue."
-11. Wait for explicit user confirmation before proceeding.
+write two or three real choices to `proposals.md`. for each choice, give the idea, key changes, good parts, bad parts, risks, and rough size. say which choice you prefer and why
 
----
+show the choices to the user and ask them to pick one. if changes are asked for, update `proposals.md` and ask again. do not code before approval
 
-## Phase 2 — Propose (Ask Mode)
+## plan and delegation
 
-Stay in ask mode. Do not write any code.
+after approval, use plan mode if the app has it. write the scope, done checks, files, work order, and risks to `plan.md`. ask again only if this changes the approved choice in a real way
 
-1. Mark the Phase 2 task as `in_progress` via `TaskUpdate`.
-2. Generate **2–3 distinct approaches** and write them to `~/.maps/{project}/{slug}/plan.md`. Each approach must include:
-   - A short title and one-sentence summary
-   - Key implementation steps (bullet points)
-   - Pros and cons
-   - Rough complexity (Low / Medium / High)
-3. End the file with a blank `## Decision` section for the human to fill in.
-4. Mark the Phase 2 task as `completed` via `TaskUpdate`.
+for each new user request during the map, first check if it is bounded and can run alone. if it can, give it to a subagent to keep the main context small. for implementation, wait until any needed failing tests exist
 
-**Stop and tell the user:** "Here are your options in `~/.maps/{project}/{slug}/plan.md`. Pick one (or add inline notes) and reply with your choice."
+do not let agents edit the same files at the same time. keep choices, approvals, user questions, shared files, integration, and tightly linked work with the main agent
 
-> The user may annotate `plan.md` directly — corrections, constraints, rejected sections. If they do, re-read the file, address all notes, update the plan, and ask again. Repeat up to 3 times. Always include `"don't implement yet"` in your own internal guard.
+## tests
 
----
+make or enter the worktree now if the user chose one. add the fewest tests that prove the new behavior. run each new test before coding and check that it fails because the behavior is missing
 
-## Phase 3 — Plan Mode (After Human Approves)
+write the command and useful failure in `run.md`. if the test passes, fix it before coding
 
-Once the human has chosen an approach:
+## implementation and checks
 
-1. Mark the Phase 3 task as `in_progress` via `TaskUpdate`.
-2. Call `EnterPlanMode` to expand the chosen approach into a full implementation plan inside `plan.md`. When planning is complete, call `ExitPlanMode`. The plan must include:
-   - Acceptance criteria (what "done" looks like)
-   - Ordered implementation steps
-   - Files to create or modify
-   - A granular `## Todo` checklist (each item is one atomic task)
-   - Performance criteria (if measurable — skip section if not applicable)
-3. For each item in the `## Todo` checklist, create a child task under the Phase 5 Implement task using `TaskCreate`.
-4. Mark the Phase 3 task as `completed` via `TaskUpdate`.
-5. Present the plan to the human for a final review before moving on.
+code only the approved work. follow repo rules and useful local patterns. run small checks while coding, then run the right tests, lint, format, type, and build checks
 
----
+write the commands and results to `validation.md`. do not hide, skip, or weaken a failure
 
-## Phase 4 — Tests First
+## audit and review
 
-1. Mark the Phase 4 task as `in_progress` via `TaskUpdate`.
-2. **If the user opted into a worktree** (check `worktree:` in `research.md`): call `EnterWorktree` now to isolate all code changes from this point forward. Note the worktree path in `plan.md` under `## Worktree`.
+give the changed files and repo rules to a fresh subagent. have it run `code-audit` and report findings without editing. fix clear issues that are in scope and write any kept issue and its reason to `audit.md`
 
-Write failing tests **before any implementation code**. Do not make them pass yet.
+ask the user to review the changed files with the app review tools. treat their notes as the next work request in the approved scope. for a behavior change, change or add a test and check its failure first. code, check, audit, and ask for review again until approved
 
-- Unit tests: one per logical unit of behaviour
-- Integration tests: at least one covering the happy path end-to-end
-- Name test files clearly so they are easy to find later
-- Run the test suite and confirm all new tests **fail** for the right reason
-- Append test file paths to the `## Todo` checklist in `plan.md` and create corresponding child tasks via `TaskCreate`
+## finish
 
-3. Mark the Phase 4 task as `completed` via `TaskUpdate`.
-
----
-
-## Phase 5 — Implement
-
-1. Mark the Phase 5 task as `in_progress` via `TaskUpdate`.
-
-Issue this prompt to yourself (adapt language to the stack):
-
-> "Implement everything in the todo list. Mark each task as completed both in `plan.md` and via `TaskUpdate` as you finish it. Do not stop until all tasks are checked. Do not add unnecessary comments or docs. Continuously use the `LSP` tool for type-checking diagnostics and run the linter to catch issues early."
-
-Rules during implementation:
-- Follow the plan exactly; do not invent scope
-- When completing each todo item: mark it `[x]` in `plan.md` **and** call `TaskUpdate` to mark the corresponding task `completed`
-- If a task is blocked, note it inline in `plan.md` and continue with the next task
-- Run the full test suite after each logical group of tasks, not only at the end
-
-2. Once all todo items are done, mark the Phase 5 task as `completed` via `TaskUpdate`.
-
----
-
-## Phase 6 — Verify Tests Pass
-
-1. Mark the Phase 6 task as `in_progress` via `TaskUpdate`.
-
-Run the full test suite. All tests (old and new) must be green before continuing.
-
-If a test fails:
-1. Read the failure output carefully
-2. Fix the implementation (not the test) unless the test itself was wrong
-3. Re-run until clean
-4. Do not comment out or skip tests to make the suite pass
-
-2. Mark the Phase 6 task as `completed` via `TaskUpdate`.
-
----
-
-## Phase 7 — Code Audit
-
-Skip this phase (and mark its task `completed`) if no modified files are Python or C#.
-
-1. Mark the Phase 7 task as `in_progress` via `TaskUpdate`.
-2. Run the `code-audit` skill against modified files only (not the whole repo). Review the findings with the human and address any violations before moving on. Do not silently ignore findings — note any deferred items in `plan.md` under `## Audit Notes`.
-3. Mark the Phase 7 task as `completed` via `TaskUpdate`.
-
----
-
-## Phase 8 — Stopwatch Benchmarks
-
-Skip this phase (and mark its task `completed`) only if the plan's performance criteria section is marked "N/A".
-
-1. Mark the Phase 8 task as `in_progress` via `TaskUpdate`.
-2. Write inline stopwatch benchmarks — no external benchmarking library required. See [references/benchmarks.md](references/benchmarks.md) for language-specific stopwatch patterns.
-3. Compare results against the performance criteria in `plan.md`. If a threshold is not met, note it in `plan.md` under `## Performance Results` and surface it to the human — do not silently skip.
-4. Mark the Phase 8 task as `completed` via `TaskUpdate`.
-
----
-
-## Phase 9 — Wrap-up
-
-1. Mark the Phase 9 task as `in_progress` via `TaskUpdate`.
-2. Mark the plan status at the top of `plan.md`: `**Status: DONE ✓**`
-3. Append a brief `## Lessons` section to `plan.md` with anything non-obvious learned during implementation.
-4. **If running in a worktree** (check `## Worktree` in `plan.md`): call `ExitWorktree` to return to the main tree. Summarize any merge steps the human needs to take.
-5. Mark the Phase 9 task as `completed` via `TaskUpdate`.
-6. Print a short summary to the human: what was built, test results, benchmark results (if run), worktree merge instructions (if applicable), any open items.
-
----
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| Tests pass before any implementation | The tests are testing the wrong thing — re-read them and fix assertions |
-| Plan mode produces a generic plan | Add more detail to `research.md` and re-run Phase 2 before entering plan mode |
-| Implementation drifts from the plan | Stop, revert with `git checkout .`, narrow scope in `plan.md`, restart Phase 5 |
-| Context window fills up mid-session | Point Claude back to `~/.maps/{project}/{slug}/plan.md` and `research.md` — they survive compaction and are accessible from any worktree |
-| Benchmark is slower than threshold | Do not tune blindly — profile first, identify the bottleneck, propose a fix to the human |
-
----
-
-## Examples
-
-**Example 1 — New feature**
-> User: `/map add keyset pagination to the /posts endpoint`
-> Claude: Derives project name `my-api`, slug `add-keyset-pagination`. Asks about worktree — user says yes. Reads the posts controller, ORM layer, and existing pagination. Writes `~/.maps/my-api/add-keyset-pagination/research.md`. Waits. Then writes 3 approaches to `plan.md` (offset, keyset, hybrid). Waits for human to pick. Enters plan mode. Calls `EnterWorktree`. Writes failing tests. Implements. Runs tests. Benchmarks query time vs. the 50ms threshold in the plan. Calls `ExitWorktree`.
-
-**Example 2 — Bug fix**
-> User: `map: the task scheduler is running cancelled tasks`
-> Claude: Derives project `my-app`, slug `fix-scheduler-cancelled-tasks`. Asks about worktree — user says no. Traces the scheduler, cancellation flow, and queue consumer. Writes `research.md` documenting where cancellation state is checked (and missed). Proposes 2 fixes. Waits. Implements the chosen fix behind a failing regression test first.
-
-**Example 3 — Refactor**
-> User: `let's map the auth middleware rewrite`
-> Claude: Deep-reads all middleware, session handling, and callers. Writes `research.md`. Proposes 2 approaches (drop-in replacement vs. incremental migration). Human annotates plan.md with "no breaking API changes". Claude updates plan, enters plan mode, writes tests that assert existing API contracts, then implements.
+write the final state, checks, worktree path, and open work to `run.md`. tell the user what changed and how to use the worktree if needed

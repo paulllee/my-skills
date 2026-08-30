@@ -1,0 +1,4 @@
+interface:
+  display_name: "code audit"
+  short_description: "check changed files against my code style"
+  default_prompt: "use $code-audit to check the changed files for style issues"
