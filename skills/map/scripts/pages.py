@@ -616,9 +616,13 @@ background:none}
 .viewed{
 gap:5px;
 color:var(--muted);
-font:12px system-ui}
+font:12px system-ui;
+cursor:pointer;
+user-select:none;
+-webkit-user-select:none}
 .viewed input{
-margin:0}
+margin:0;
+cursor:pointer}
 .empty{
 background:var(--surface)}
 
