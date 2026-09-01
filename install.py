@@ -9,6 +9,9 @@ ROOT = Path(__file__).resolve().parent
 STYLE_SOURCE = ROOT / "styles" / "simple-english.md"
 SKILLS_SOURCE = ROOT / "skills"
 SKILL_IGNORES = (".DS_Store", ".pixi", ".pytest_cache", ".ruff_cache", "__pycache__", "*.pyc", "*.pyo")
+GREEN = "\033[1;32m"
+YELLOW = "\033[1;33m"
+RESET = "\033[0m"
 
 
 def style_body(source: str) -> str:
@@ -34,18 +37,28 @@ def install(home: Path) -> None:
     settings = json.loads(settings_path.read_text(encoding="utf-8")) if settings_path.exists() else {}
     settings["outputStyle"] = "simple english"
     write_text(settings_path, json.dumps(settings, indent=2, ensure_ascii=False) + "\n")
+    print(f'{GREEN}installed{RESET} "simple english" style')
 
-    for destination in (home / ".codex" / "skills", home / ".claude" / "skills"):
-        for skill_source in sorted(SKILLS_SOURCE.iterdir()):
-            if skill_source.is_dir():
-                target = destination / skill_source.name
+    for skill_source in sorted(SKILLS_SOURCE.iterdir()):
+        if skill_source.is_dir():
+            targets = (
+                home / ".codex" / "skills" / skill_source.name,
+                home / ".claude" / "skills" / skill_source.name,
+            )
+            deleted_old_skill = False
+            for target in targets:
                 if target.exists():
                     shutil.rmtree(target)
+                    deleted_old_skill = True
+            if deleted_old_skill:
+                print(f'{YELLOW}deleted{RESET} old "{skill_source.name}" skill')
+            for target in targets:
                 shutil.copytree(
                     skill_source,
                     target,
                     ignore=shutil.ignore_patterns(*SKILL_IGNORES),
                 )
+            print(f'{GREEN}installed{RESET} "{skill_source.name}" skill')
 
 
 if __name__ == "__main__":

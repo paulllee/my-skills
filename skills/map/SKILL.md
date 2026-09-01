@@ -17,9 +17,13 @@ read the code, tests, settings, repo rules, useful past maps, and official docs 
 
 ## choices
 
-write two or three real choices to `proposals.md`. for each choice, give the idea, key changes, good parts, bad parts, risks, and rough size. say which choice you prefer and why
+write two or three real choices to `proposals.json` in the map folder. the schema is in the docstring at the top of [scripts/pages.py](scripts/pages.py). read only the docstring (about the first 60 lines), never the rest of the file. for each choice, put the idea in `summary`, key changes in `steps`, good parts in `pros`, bad parts and risks in `cons`, and rough size in `complexity`. say which choice you prefer and why in the `description` field. keep the `task` field short, it is the page title
 
-show the choices to the user and ask them to pick one. if changes are asked for, update `proposals.md` and ask again. do not code before approval
+show the choices on a page. run in the background:
+
+    pixi exec python <this skill's folder>/scripts/pages.py proposals <map folder>
+
+the page opens in the browser and the script exits when the user hits send. read `feedback.json`. if there are comments, answer each one in the `replies` field of `proposals.json`, update the choices, and rerun the script. do not code before a choice is picked
 
 ## plan and delegation
 
@@ -45,8 +49,18 @@ write the commands and results to `validation.md`. do not hide, skip, or weaken 
 
 give the changed files and repo rules to a fresh subagent. have it run `code-audit` and report findings without editing. fix clear issues that are in scope and write any kept issue and its reason to `audit.md`
 
-ask the user to review the changed files with the app review tools. treat their notes as the next work request in the approved scope. for a behavior change, change or add a test and check its failure first. code, check, audit, and ask for review again until approved
+make the diff with git itself. a shell `>` redirect can re-encode and mangle unicode:
+
+    git diff --output=<map folder>/diff.patch
+
+append a plain english note of what was built or changed this round to `summary.json`, a json list of strings, one entry per round. the page shows it as a thread at the top and numbers the rounds itself, so no round prefixes in the text. then run in the background with the repo as the working folder so the page can show unchanged lines:
+
+    pixi exec python <this skill's folder>/scripts/pages.py review <map folder>
+
+read `review-feedback.json`. treat each comment as the next work request in the approved scope, or push back by answering it in `replies.json`. for a behavior change, change or add a test and check its failure first. code, check, audit, remake the diff, add to `summary.json`, and rerun the script until approved
 
 ## finish
 
 write the final state, checks, worktree path, and open work to `run.md`. tell the user what changed and how to use the worktree if needed
+
+never run git commit or git push
