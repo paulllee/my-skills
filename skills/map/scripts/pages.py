@@ -32,10 +32,12 @@ it also updates `viewed.json`
 line comments use `file`, `line`, `side`, and `text`. ranges add `line_end`
 and `side_end`. whole-file comments use line 0 and side `file`. summary
 comments use an empty file, the round number as line, side `summary`, and a
-highlighted `quote`. replies may use `reply_to`
+highlighted `quote`. every review comment includes `round`. replies may use
+`reply_to`
 
 saved threads in `replies.json` may use `messages`, an ordered list of objects
-with `author`, `text`, and an optional `quote`
+with `author`, `text`, `round`, and an optional `quote`. preserve the list and
+append each new user comment and agent reply for its round
 """
 
 import hashlib
@@ -359,8 +361,11 @@ align-items:flex-start}
 position:sticky;
 top:102px;
 width:248px;
+min-width:180px;
+max-width:50vw;
 max-height:calc(100vh - 102px);
 overflow:auto;
+resize:horizontal;
 padding:18px 20px 24px;
 flex:none}
 .tree #tree-toggle{
@@ -369,8 +374,10 @@ width:100%;
 min-width:0}
 .tree.closed{
 width:58px;
+min-width:58px;
 padding:18px 8px 24px;
-overflow:hidden}
+overflow:hidden;
+resize:none}
 .tree.closed #tree-toggle{
 height:38px;
 padding:0}
@@ -422,15 +429,14 @@ background:var(--plus)}
 background:var(--minus)}
 .dot.modified{
 background:var(--mod)}
+.tree-file.viewed-file{
+color:var(--faint);
+opacity:.6}
 .files{
 min-width:0;
 flex:1;
 border-left:1px solid var(--line);
 padding:18px 40px 40px 28px}
-.files::after{
-content:"";
-display:block;
-height:calc(100vh - var(--review-header-height,101px) - 48px)}
 .summary{
 border-bottom:1px solid var(--line);
 padding-bottom:14px}
@@ -528,6 +534,9 @@ font-size:14px;
 line-height:1}
 .split td.code{
 width:50%}
+.split.select-old td.code[data-side="new"],.split.select-new td.code[data-side="old"]{
+user-select:none;
+-webkit-user-select:none}
 .cbtn{
 position:absolute;
 inset:0;
@@ -679,6 +688,10 @@ document.documentElement.dataset.theme=b.dataset.theme;
 $$('button[data-theme]').forEach(x=>x.classList.toggle('on',x===b))}
 }
 );
+
+document.addEventListener('click',event=>{
+$$('.settings[open]').forEach(settings=>{
+if(!settings.contains(event.target))settings.removeAttribute('open')})});
 
 function composer(anchor,placeholder,save,cancel=()=>{}){
 const previous=$('.composer');
@@ -957,7 +970,7 @@ const attr=s=>esc(s).replaceAll('"','&quot;').replaceAll("'",'&#39;');
 const data=(element,name)=>(element.dataset[name]||'').trim();
 const commentViews=new Map();
 const collapsedThreads=new Set(),resolvedThreads=new Set();
-let dragStart=null,dragRows=[];
+const currentRound=Math.max(1,DATA.summary.length);
 
 function threadKey(reply){return DATA.replies.indexOf(reply)}
 
@@ -967,7 +980,8 @@ const classes=`comment-thread${collapsedThreads.has(key)?' collapsed':''}${resol
 const messages=reply.messages||[{author:'you',text:reply.reply_to,quote:reply.quote},{author:'agent',text:reply.text}];
 const cards=messages.filter(message=>message.text).map((message,index)=>{
 const preview=message.quote?`<pre class="comment-preview">${esc(message.quote)}</pre>`:'';
-const replyButton=index===messages.length-1?`<button class="reply" data-reply="${key}" data-file="${attr(file)}" data-line="${line}" data-side="${side}">reply</button>`:'';
+const round=message.round||reply.round||currentRound;
+const replyButton=index===messages.length-1?`<button class="reply" data-reply="${key}" data-file="${attr(file)}" data-line="${line}" data-side="${side}" data-round="${round}">reply</button>`:'';
 return `<div class="comment-card"><span class="comment-author">${message.author==='agent'?'agent':'you'}</span>${preview}<p>${esc(message.text)}</p>${replyButton}</div>`}).join('');
 return `<div class="${classes}" data-thread="${key}"><div class="thread-actions"><button class="collapse-thread">${collapsedThreads.has(key)?'expand':'collapse'}</button><button class="resolve-thread">resolve</button></div>${cards}</div>`}
 
@@ -988,15 +1002,6 @@ let start=targets.indexOf(first),end=targets.indexOf(last);
 if(start>end)[start,end]=[end,start];
 return targets.slice(start,end+1)}
 
-function clearDrag(){
-dragRows.forEach(target=>target.classList.remove('selected-side'));
-dragRows=[]}
-
-function showDrag(first,last){
-clearDrag();
-dragRows=targetsBetween(first,last);
-dragRows.forEach(target=>target.classList.add('selected-side'))}
-
 function removeReviewComment(id){
 const view=commentViews.get(id);
 unwrapMarks(view?.marks);
@@ -1015,7 +1020,7 @@ return `<div class="comment-thread"><div class="comment-card"><span class="comme
 
 function bindLocalThread(host,comment){
 const thread=$('.comment-thread',host),latest=localRepliesFor(comment).at(-1)||comment;
-$$('.reply-local',host).at(-1).onclick=()=>openThreadReply(thread,latest.text,{file:comment.file,line:comment.line,side:comment.side,thread:comment.id});
+$$('.reply-local',host).at(-1).onclick=()=>openThreadReply(thread,latest.text,{file:comment.file,line:comment.line,side:comment.side,thread:comment.id,round:comment.round||currentRound});
 $(`[data-comment-id="${comment.id}"].remove-draft`,host)?.addEventListener('click',()=>removeReviewComment(comment.id));
 $(`[data-comment-id="${comment.id}"].remove-file`,host)?.addEventListener('click',()=>removeReviewComment(comment.id))}
 
@@ -1085,14 +1090,19 @@ $('.save',pending).onclick=()=>{
 const text=textarea.value.trim();
 if(!text)return;
 const id=nextCommentId++;
-comments.push({id,thread:id,file,line:0,side:'file',text});
+comments.push({id,thread:id,file,line:0,side:'file',round:currentRound,text});
 pending.outerHTML=`<div class="comment-thread local-file" data-comment-id="${id}"><div class="comment-card"><span class="comment-author">you</span><p>${esc(text)}</p><button class="reply-local">reply</button><button class="remove-file">remove</button></div></div>`;
 const thread=$(`.local-file[data-comment-id="${id}"]`,host);
-$('.reply-local',thread).onclick=()=>openThreadReply(thread,text,{file,line:0,side:'file',thread:id},thread);
+$('.reply-local',thread).onclick=()=>openThreadReply(thread,text,{file,line:0,side:'file',thread:id,round:currentRound},thread);
 $('.remove-file',thread).onclick=()=>{
 thread.remove();
 comments=comments.filter(comment=>comment.id!==id&&comment.thread!==id)}
 };
+textarea.onkeydown=event=>{
+if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){
+event.preventDefault();
+$('.save',pending).click()}
+else if(event.key==='Escape')pending.remove()};
 textarea.focus()}
 
 function reviewCells(side,content){
@@ -1104,7 +1114,7 @@ function saveReviewComment(targets,marks,quote,text){
 const first=targets[0],last=targets.at(-1),id=nextCommentId++;
 const firstRow=first.closest('tr'),lastRow=last.closest('tr');
 const side=data(first,'side');
-const comment={id,thread:id,file:data(firstRow,'file'),line:+data(first,'line'),side,text};
+const comment={id,thread:id,file:data(firstRow,'file'),line:+data(first,'line'),side,round:currentRound,text};
 if(last!==first){
 comment.line_end=+data(last,'line');
 comment.side_end=side}
@@ -1117,7 +1127,7 @@ const preview=quote?`<pre class="comment-preview">${esc(quote.slice(0,400))}</pr
 const card=`<div class="comment-thread"><div class="comment-card"><span class="comment-author">you</span>${preview}<p>${esc(text)}</p><button class="reply-local">reply</button><button class="remove-draft" data-comment-id="${id}">remove</button></div></div>`;
 lastRow.insertAdjacentHTML('afterend',`<tr class="draft-note" data-comment-id="${id}">${reviewCells(side,card)}</tr>`);
 const draft=$(`.draft-note[data-comment-id="${id}"]`),thread=$('.comment-thread',draft);
-$('.reply-local',draft).onclick=()=>openThreadReply(thread,text,{file:comment.file,line:comment.line,side:comment.side,thread:id},draft);
+$('.reply-local',draft).onclick=()=>openThreadReply(thread,text,{file:comment.file,line:comment.line,side:comment.side,thread:id,round:currentRound},draft);
 $(`.remove-draft[data-comment-id="${id}"]`).onclick=()=>removeReviewComment(id)}
 
 function commentOnTargets(targets,marks=[],quote=''){
@@ -1129,7 +1139,6 @@ const editor=`<div class="comment-card">${preview}<textarea placeholder="leave a
 lastRow.insertAdjacentHTML('afterend',`<tr class="draft-note pending-note">${reviewCells(side,editor)}</tr>`);
 const pending=$('.pending-note');
 const cancel=()=>{
-clearDrag();
 unwrapMarks(marks);
 pending.remove()};
 $('.cancel',pending).onclick=cancel;
@@ -1137,7 +1146,6 @@ $('.save',pending).onclick=()=>{
 const text=$('textarea',pending).value.trim();
 if(!text)return;
 pending.remove();
-clearDrag();
 saveReviewComment(targets,marks,quote,text)};
 $('textarea',pending).onkeydown=e=>{
 if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){
@@ -1208,10 +1216,17 @@ if(!node.dirs.has(part))node.dirs.set(part,{dirs:new Map(),files:[]});
 node=node.dirs.get(part)}
 node.files.push({name,index,file})});
 const branch=(node,isRoot=false,prefix='')=>{
-const dirs=[...node.dirs.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([name,child])=>{
-const path=prefix?prefix+'/'+name:name;
-return `<details open><summary title="${attr(path)}">${esc(name)}</summary>${branch(child,false,path)}</details>`}).join('');
-const leaves=node.files.sort((a,b)=>a.name.localeCompare(b.name)).map(item=>`<a class="tree-file" href="#f-${item.index}" title="${attr(item.file.path)}" data-index="${item.index}" data-path="${attr(item.file.path.toLowerCase())}"><i class="dot ${item.file.status}"></i><span>${esc(item.name)}</span></a>`).join('');
+const directory=(name,child)=>{
+const names=[name];
+let path=prefix?prefix+'/'+name:name;
+while(!child.files.length&&child.dirs.size===1){
+const [nextName,nextChild]=child.dirs.entries().next().value;
+names.push(nextName);
+path+='/'+nextName;
+child=nextChild}
+return `<details open><summary title="${attr(path)}">${esc(names.join('/'))}</summary>${branch(child,false,path)}</details>`};
+const dirs=[...node.dirs.entries()].sort(([a],[b])=>a.localeCompare(b)).map(([name,child])=>directory(name,child)).join('');
+const leaves=node.files.sort((a,b)=>a.name.localeCompare(b.name)).map(item=>`<a class="tree-file${viewed[item.file.path]===item.file.hash?' viewed-file':''}" href="#f-${item.index}" title="${attr(item.file.path)}" data-index="${item.index}" data-path="${attr(item.file.path.toLowerCase())}"><i class="dot ${item.file.status}"></i><span>${esc(item.name)}</span></a>`).join('');
 return `<div class="tree-files${isRoot?' root':''}">${dirs}${leaves}</div>`};
 return branch(root,true)}
 
@@ -1275,18 +1290,22 @@ $$('.viewed input').forEach(x=>x.onchange=()=>{
 const file=data(x,'file');
 const f=DATA.files.find(y=>y.path===file);
 const section=x.closest('.file');
+const treeFile=$(`.tree-file[data-index="${DATA.files.indexOf(f)}"]`);
 if(x.checked){
 viewed[f.path]=f.hash;
+treeFile?.classList.add('viewed-file');
 setCollapsed(section,true)}
 else{
 delete viewed[f.path];
+treeFile?.classList.remove('viewed-file');
 setCollapsed(section,false)}}
 );
 $$('.file-note').forEach(b=>b.onclick=()=>commentOnFile(b));
-$$('.cbtn').forEach(b=>b.onmousedown=e=>{
+$$('.cbtn').forEach(b=>b.onclick=e=>{
 e.preventDefault();
-dragStart=$(`.code[data-side="${data(b,'side')}"]`,b.closest('tr'));
-showDrag(dragStart,dragStart)});
+const target=$(`.code[data-side="${data(b,'side')}"]`,b.closest('tr'));
+if(!target)return;
+commentOnTargets([target],[],(target.textContent||'').trim())});
 $$('.fold [data-expand]').forEach(button=>button.onclick=()=>{
 const x=button.closest('.fold');
 const f=DATA.files.find(y=>y.path===data(x,'file'));
@@ -1315,7 +1334,7 @@ $$('.reply').forEach(b=>b.onclick=()=>{
 const r=DATA.replies[+b.dataset.reply];
 const latest=r.messages?.at(-1)?.text||r.text;
 openThreadReply(b.closest('.comment-thread'),latest,{
-file:data(b,'file'),line:+data(b,'line'),side:data(b,'side')},b)}
+file:data(b,'file'),line:+data(b,'line'),side:data(b,'side'),round:+data(b,'round')||currentRound},b)}
 );
 $$('.summary p').forEach(p=>p.onmouseup=e=>{
 e.stopPropagation();
@@ -1325,7 +1344,7 @@ const marks=markRange(selection.getRangeAt(0));
 selection.removeAllRanges();
 composer(marks[0]||p,'comment on this round',text=>{
 const id=nextCommentId++;
-comments.push({id,thread:id,file:'',line:+p.dataset.round,side:'summary',quote:quote.slice(0,400),text});
+comments.push({id,thread:id,file:'',line:+p.dataset.round,side:'summary',round:+p.dataset.round,quote:quote.slice(0,400),text});
 marks.forEach(mark=>mark.dataset.commentId=id);
 p.insertAdjacentHTML('afterend',`<article class="comment-card summary-comment" data-comment-id="${id}"><pre class="comment-preview">${esc(quote.slice(0,400))}</pre><p>${esc(text)}</p><button class="remove-summary" data-comment-id="${id}">remove</button></article>`);
 $(`.remove-summary[data-comment-id="${id}"]`).onclick=()=>{
@@ -1349,38 +1368,19 @@ const visible=$$('.tree-file',folder).some(link=>link.style.display!=='none');
 folder.style.display=visible?'':'none';
 if(query&&visible)folder.open=true})}}
 
-document.addEventListener('mousemove',e=>{
-if(!dragStart)return;
-const gutter=e.target.closest('td.ln');
-const button=gutter?.querySelector('.cbtn');
-if(!button||data(button,'side')!==data(dragStart,'side'))return;
-const target=$(`.code[data-side="${data(button,'side')}"]`,gutter.closest('tr'));
-if(target)showDrag(dragStart,target)});
-
-document.addEventListener('mouseup',e=>{
-if(dragStart){
-const targets=[...dragRows];
-dragStart=null;
-const quote=targets.map(target=>target.textContent||'').join('\n').trim();
-commentOnTargets(targets,[],quote);
-return}
-if(e.target.closest('button,.composer,.draft-note'))return;
-const selection=getSelection(),quote=selection.toString().trim();
-if(!quote)return;
-const range=selection.getRangeAt(0);
-const startNode=range.startContainer.nodeType===Node.TEXT_NODE?range.startContainer.parentElement:range.startContainer;
-const endNode=range.endContainer.nodeType===Node.TEXT_NODE?range.endContainer.parentElement:range.endContainer;
-const start=startNode.closest?.('td.code[data-side]'),end=endNode.closest?.('td.code[data-side]');
-const targets=targetsBetween(start,end);
-if(!targets.length)return;
-const marks=markRange(range);
-selection.removeAllRanges();
-commentOnTargets(targets,marks,quote)});
-
 $('#tree-toggle').onclick=()=>{
 const tree=$('.tree'),closed=tree.classList.toggle('closed');
 $('#tree-toggle').textContent=closed?'>':'files';
 $('#tree-toggle').setAttribute('aria-expanded',String(!closed))};
+document.addEventListener('pointerdown',event=>{
+const code=event.target.closest('table.split td.code[data-side]');
+if(!code)return;
+const table=code.closest('table');
+table.classList.add(data(code,'side')==='old'?'select-old':'select-new')});
+document.addEventListener('pointerup',()=>{
+$$('table.select-old,table.select-new').forEach(table=>table.classList.remove('select-old','select-new'))});
+document.addEventListener('pointercancel',()=>{
+$$('table.select-old,table.select-new').forEach(table=>table.classList.remove('select-old','select-new'))});
 $$('[data-view]').forEach(b=>b.onclick=()=>{
 view=b.dataset.view;
 $$('[data-view]').forEach(x=>x.classList.toggle('on',x===b));
