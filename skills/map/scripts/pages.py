@@ -545,7 +545,7 @@ border-radius:0;
 padding:0}
 .ln:hover .cbtn{
 display:block}
-.selected-side{
+.selected-side,.drag-selected{
 box-shadow:inset 3px 0 var(--accent)!important}
 .draft-note td{
 padding:8px 12px;
@@ -1005,6 +1005,7 @@ const commentViews=new Map();
 const collapsedThreads=new Set(),resolvedThreads=new Set();
 const currentRound=Math.max(1,DATA.summary.length);
 let dragStart=null,dragRows=[];
+let textSelectionSide=null,textSelectionTable=null;
 
 function threadKey(reply){return DATA.replies.indexOf(reply)}
 
@@ -1037,13 +1038,13 @@ if(start>end)[start,end]=[end,start];
 return targets.slice(start,end+1)}
 
 function clearDrag(){
-dragRows.forEach(target=>target.classList.remove('selected-side'));
+dragRows.forEach(target=>target.classList.remove('drag-selected'));
 dragRows=[]}
 
 function showDrag(first,last){
 clearDrag();
 dragRows=targetsBetween(first,last);
-dragRows.forEach(target=>target.classList.add('selected-side'))}
+dragRows.forEach(target=>target.classList.add('drag-selected'))}
 
 function removeReviewComment(id){
 const view=commentViews.get(id);
@@ -1418,9 +1419,22 @@ $('#tree-toggle').textContent=closed?'>':'files';
 $('#tree-toggle').setAttribute('aria-expanded',String(!closed))};
 document.addEventListener('pointerdown',event=>{
 const code=event.target.closest('table.split td.code[data-side]');
+textSelectionSide=null;
+textSelectionTable=null;
 if(!code)return;
 const table=code.closest('table');
+textSelectionSide=data(code,'side');
+textSelectionTable=table;
 table.classList.add(data(code,'side')==='old'?'select-old':'select-new')});
+document.addEventListener('selectionchange',()=>{
+if(!textSelectionSide)return;
+const selection=getSelection();
+if(!selection.rangeCount)return;
+const focusNode=selection.focusNode;
+const focusElement=focusNode?.nodeType===Node.TEXT_NODE?focusNode.parentElement:focusNode;
+const focusCode=focusElement?.closest?.('td.code[data-side]');
+const focusSide=focusCode?data(focusCode,'side'):null;
+if(focusSide!==textSelectionSide||focusCode.closest('table')!==textSelectionTable)selection.removeAllRanges()});
 document.addEventListener('pointermove',event=>{
 if(!dragStart)return;
 const gutter=event.target.closest('td.ln'),button=gutter?.querySelector('.cbtn');
@@ -1441,18 +1455,6 @@ const quote=targets.map(target=>target.textContent||'').join('\n').trim();
 commentOnTargets(targets,[],quote);
 clearSplitSelection();
 return}
-if(!event.target.closest('button,.composer,.draft-note')){
-const selection=getSelection(),quote=selection.toString().trim();
-if(quote&&selection.rangeCount){
-const range=selection.getRangeAt(0);
-const startNode=range.startContainer.nodeType===Node.TEXT_NODE?range.startContainer.parentElement:range.startContainer;
-const endNode=range.endContainer.nodeType===Node.TEXT_NODE?range.endContainer.parentElement:range.endContainer;
-const start=startNode.closest?.('td.code[data-side]'),end=endNode.closest?.('td.code[data-side]');
-const targets=targetsBetween(start,end);
-if(targets.length){
-const marks=markRange(range);
-selection.removeAllRanges();
-commentOnTargets(targets,marks,quote)}}}
 clearSplitSelection()});
 document.addEventListener('pointercancel',cancelPointerSelection);
 addEventListener('blur',cancelPointerSelection);
