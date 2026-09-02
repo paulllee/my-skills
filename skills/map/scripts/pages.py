@@ -36,8 +36,9 @@ highlighted `quote`. every review comment includes `round`. replies may use
 `reply_to`
 
 saved threads in `replies.json` may use `messages`, an ordered list of objects
-with `author`, `text`, `round`, and an optional `quote`. preserve the list and
-append each new user comment and agent reply for its round
+with `author`, `text`, `round`, and an optional `quote`. use `you` for user
+messages and `agent` for agent messages. preserve the list and append each new
+user comment and agent reply for its round
 """
 
 import hashlib
@@ -538,6 +539,7 @@ line-height:1}
 user-select:none;
 -webkit-user-select:none}
 .split-panes td.code{width:100%}
+.pane-empty td{background:var(--surface)!important}
 .pane-spacer td{padding:0}
 .cbtn{
 position:absolute;
@@ -1016,6 +1018,9 @@ let textSelectionPane=null,adjustingTextSelection=false;
 
 function threadKey(reply){return DATA.replies.indexOf(reply)}
 
+function messageAuthor(message){
+return message.author==='agent'||message.author==='assistant'?'agent':'you'}
+
 function threadHtml(reply,file,line,side){
 const key=threadKey(reply);
 const classes=`comment-thread${collapsedThreads.has(key)?' collapsed':''}${resolvedThreads.has(key)?' resolved':''}`;
@@ -1024,7 +1029,7 @@ const cards=messages.filter(message=>message.text).map((message,index)=>{
 const preview=message.quote?`<pre class="comment-preview">${esc(message.quote)}</pre>`:'';
 const round=message.round||reply.round||currentRound;
 const replyButton=index===messages.length-1?`<button class="reply" data-reply="${key}" data-file="${attr(file)}" data-line="${line}" data-side="${side}" data-round="${round}">reply</button>`:'';
-return `<div class="comment-card"><span class="comment-author">${message.author==='agent'?'agent':'you'}</span>${preview}<p>${esc(message.text)}</p>${replyButton}</div>`}).join('');
+return `<div class="comment-card"><span class="comment-author">${messageAuthor(message)}</span>${preview}<p>${esc(message.text)}</p>${replyButton}</div>`}).join('');
 return `<div class="${classes}" data-thread="${key}"><div class="thread-actions"><button class="collapse-thread">${collapsedThreads.has(key)?'expand':'collapse'}</button><button class="resolve-thread">resolve</button></div>${cards}</div>`}
 
 function notes(file,line,side){
@@ -1280,10 +1285,10 @@ return `<tr class="ctx" data-file="${attr(f.path)}"><td class="ln">${old}${butto
 
 function paneRowHtml(f,r,side,rowKey){
 if(r.kind==='hunk')return `<tr class="hunk" data-row-key="${rowKey}"${side==='new'?' aria-hidden="true"':''}><td colspan="2">${esc(r.text)}</td></tr>`;
-if(r.kind==='fold')return `<tr class="fold" data-file="${attr(f.path)}" data-fold="${r.fold}" data-row-key="${rowKey}"><td colspan="2">${foldControls(r)}</td></tr>`;
+if(r.kind==='fold')return `<tr class="fold${side==='old'?' pane-spacer':''}" data-file="${attr(f.path)}" data-fold="${r.fold}" data-row-key="${rowKey}"${side==='old'?' aria-hidden="true"':''}><td colspan="2">${side==='new'?foldControls(r):''}</td></tr>`;
 const line=side==='old'?r.old:r.new;
 const exists=r.kind==='ctx'||(side==='old'&&r.kind==='del')||(side==='new'&&r.kind==='add');
-if(!exists)return `<tr class="${r.kind} pane-empty" data-file="${attr(f.path)}" data-row-key="${rowKey}"><td class="ln empty"></td><td class="code empty"></td></tr>`;
+if(!exists)return `<tr class="pane-empty" data-file="${attr(f.path)}" data-row-key="${rowKey}"><td class="ln empty"></td><td class="code empty"></td></tr>`;
 const button=`<button class="cbtn" title="comment" data-side="${side}" data-line="${line}">+</button>`;
 return `<tr class="${r.kind}" data-file="${attr(f.path)}" data-line="${line}" data-side="${side}" data-row-key="${rowKey}"><td class="ln">${line}${button}</td><td class="code" data-side="${side}" data-line="${line}">${esc(r.text)}</td></tr>`}
 

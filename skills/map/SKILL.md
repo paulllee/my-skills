@@ -57,7 +57,7 @@ append a plain english note of what was built or changed this round to `summary.
 
     pixi exec python <this skill's folder>/scripts/pages.py review <map folder>
 
-read `review-feedback.json`. treat each comment as the next work request in the approved scope, or push back by answering it in `replies.json`. keep one saved thread for each conversation. preserve its ordered `messages` list, then append the new user comment and agent reply with the comment's `round`. never replace earlier messages. for a behavior change, change or add a test and check its failure first. code, check, audit, remake the diff, add to `summary.json`, and rerun the script until approved
+read `review-feedback.json`. treat each comment as the next work request in the approved scope, or push back by answering it in `replies.json`. keep one saved thread for each conversation. preserve its ordered `messages` list, then append the new user comment with `author` set to `you` and the agent reply with `author` set to `agent`. include the comment's `round` on both messages. never replace earlier messages. for a behavior change, change or add a test and check its failure first. code, check, audit, remake the diff, add to `summary.json`, and rerun the script until approved
 
 ## finish
 
