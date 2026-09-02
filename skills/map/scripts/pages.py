@@ -365,7 +365,7 @@ top:102px;
 width:248px;
 min-width:180px;
 max-width:50vw;
-height:calc(100vh - 102px);
+max-height:calc(100vh - 102px);
 overflow:auto;
 padding:18px 20px 24px;
 flex:none}
@@ -550,7 +550,8 @@ line-height:1}
 user-select:none;
 -webkit-user-select:none}
 .split{table-layout:fixed}
-.split td.code{width:calc(50% - 48px)}
+.split col.line{width:48px}
+.split col.code{width:calc(50% - 48px)}
 .split td:nth-child(2){border-right:1px solid var(--line)}
 .split td.empty{background:var(--surface)!important}
 .split td.code.add{background:var(--add)}
@@ -1323,7 +1324,7 @@ const replies=rows.flatMap(item=>rowReplies(f.path,item)).map(item=>`<tr class="
 return `<tr data-file="${attr(f.path)}" data-row-key="${pair.key}">${cell(pair.old,'old')}${cell(pair.new,'new')}</tr>${replies}`}
 
 function splitFileHtml(f){
-return `<table class="split"><tbody>${splitRows(f.rows).map(pair=>splitRowHtml(f,pair)).join('')}</tbody></table>`}
+return `<table class="split"><colgroup><col class="line"><col class="code"><col class="line"><col class="code"></colgroup><tbody>${splitRows(f.rows).map(pair=>splitRowHtml(f,pair)).join('')}</tbody></table>`}
 
 function fileTree(files){
 const root={dirs:new Map(),files:[]};
