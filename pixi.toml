@@ -5,6 +5,9 @@ platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64", "win-64"]
 
 [dependencies]
 python = ">=3.11"
+ruff = "*"
 
 [tasks]
 install = "python install.py"
+lint = "ruff check --line-length 120 ."
+format = "ruff format --line-length 120 ."

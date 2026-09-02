@@ -50,7 +50,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
-
 STYLE = r"""
 *{
 box-sizing:border-box}
@@ -768,19 +767,16 @@ def settings_menu(include_view: bool = False) -> str:
 
 def page(title: str, mode: str, head: str, body: str, footer: str, script: str) -> str:
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{
-escape(title)}
+        escape(title)
+    }
 </title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet"><script>document.documentElement.dataset.theme=localStorage.getItem('map-theme')||'light'</script><style>{
-STYLE}
-</style></head><body class="{mode}"><header>{
-head}
-</header>{
-body}
-{
-footer}
-<script>{
-BASE_JS}
-\n{
-script}
+        STYLE
+    }
+</style></head><body class="{mode}"><header>{head}
+</header>{body}
+{footer}
+<script>{BASE_JS}
+\n{script}
 </script></body></html>"""
 
 
@@ -791,10 +787,14 @@ def list_items(values: list[str]) -> str:
 def render_proposals(data: dict) -> str:
     parts: list[str] = []
     if data.get("replies"):
-        parts.append(f'<section class="replies"><h2>replies to your notes</h2><ul>{list_items(data["replies"])}</ul></section>')
+        parts.append(
+            f'<section class="replies"><h2>replies to your notes</h2><ul>{list_items(data["replies"])}</ul></section>'
+        )
     for i, approach in enumerate(data["approaches"], 1):
         title = escape(str(approach["title"]))
-        parts.append(f'''<article class="approach" data-title="{escape(str(approach['title']), quote=True)}"><div class="num">{i}</div><div><h2>{title}<span class="pk-pill">picked</span></h2><p>{escape(str(approach.get('summary','')))}</p><div class="cols"><div><h3>steps</h3><ol>{list_items(approach.get('steps',[]))}</ol></div><div><h3>pros</h3><ul>{list_items(approach.get('pros',[]))}</ul></div><div><h3>cons</h3><ul>{list_items(approach.get('cons',[]))}</ul></div></div><p class="meta">complexity: {escape(str(approach.get('complexity','?')))}</p><button class="pick">pick this</button></div></article>''')
+        parts.append(
+            f'''<article class="approach" data-title="{escape(str(approach["title"]), quote=True)}"><div class="num">{i}</div><div><h2>{title}<span class="pk-pill">picked</span></h2><p>{escape(str(approach.get("summary", "")))}</p><div class="cols"><div><h3>steps</h3><ol>{list_items(approach.get("steps", []))}</ol></div><div><h3>pros</h3><ul>{list_items(approach.get("pros", []))}</ul></div><div><h3>cons</h3><ul>{list_items(approach.get("cons", []))}</ul></div></div><p class="meta">complexity: {escape(str(approach.get("complexity", "?")))}</p><button class="pick">pick this</button></div></article>'''
+        )
     desc = f'<p class="desc">{escape(str(data["description"]))}</p>' if data.get("description") else ""
     head = f'<div class="head"><small>map / proposals</small><h1>{escape(str(data["task"]))}</h1>{desc}<p class="hint">pick an approach, highlight any text to leave a note, then send</p></div>'
     body = f'<main class="proposals">{"".join(parts)}<aside id="rail"></aside></main>'
@@ -906,9 +906,7 @@ def parse_diff(text: str) -> list[dict]:
             current["rows"].append({"kind": "del", "old": old_line, "new": "", "text": raw[1:]})
             old_line += 1
         else:
-            current["rows"].append(
-                {"kind": "ctx", "old": old_line, "new": new_line, "text": raw[1:]}
-            )
+            current["rows"].append({"kind": "ctx", "old": old_line, "new": new_line, "text": raw[1:]})
             old_line += 1
             new_line += 1
     return files
@@ -935,7 +933,17 @@ def add_context(files: list[dict]) -> None:
                 if next_new < end:
                     fold_id += 1
                     edge = "start" if next_new == 1 else "between"
-                    out.append({"kind": "fold", "edge": edge, "start": next_new, "end": end, "fold": fold_id, "off": row["old_start"] - row["new_start"], "lines": lines[next_new - 1:end - 1]})
+                    out.append(
+                        {
+                            "kind": "fold",
+                            "edge": edge,
+                            "start": next_new,
+                            "end": end,
+                            "fold": fold_id,
+                            "off": row["old_start"] - row["new_start"],
+                            "lines": lines[next_new - 1 : end - 1],
+                        }
+                    )
                 out.append(row)
             else:
                 out.append(row)
@@ -945,12 +953,30 @@ def add_context(files: list[dict]) -> None:
                     next_new = int(row["new"]) + 1
         if next_new <= len(lines):
             fold_id += 1
-            out.append({"kind": "fold", "edge": "end", "start": next_new, "end": len(lines) + 1, "fold": fold_id, "off": next_old - next_new, "lines": lines[next_new - 1:]})
+            out.append(
+                {
+                    "kind": "fold",
+                    "edge": "end",
+                    "start": next_new,
+                    "end": len(lines) + 1,
+                    "fold": fold_id,
+                    "off": next_old - next_new,
+                    "lines": lines[next_new - 1 :],
+                }
+            )
         item["rows"] = out
 
 
 def review_data(task: str, files: list[dict], replies: list[dict], summary: list[str], viewed: dict) -> str:
-    return json.dumps({"task": task, "files": files, "replies": replies, "summary": summary, "viewed": viewed}).replace("</", "<\\/")
+    return json.dumps(
+        {
+            "task": task,
+            "files": files,
+            "replies": replies,
+            "summary": summary,
+            "viewed": viewed,
+        }
+    ).replace("</", "<\\/")
 
 
 def render_review(task: str, files: list[dict], replies: list[dict], summary: list[str], viewed: dict) -> str:
@@ -961,7 +987,10 @@ def render_review(task: str, files: list[dict], replies: list[dict], summary: li
     head = f'<div class="head"><small>map / review</small><h1>{escape(task)}</h1><span class="totals">{totals}</span></div>'
     body = '<main class="review-main"><nav class="tree"><button id="tree-toggle" aria-expanded="true">files</button><div class="tree-body"><input id="tree-search" placeholder="search files"></div></nav><div class="files"><section class="summary"></section><div id="file-list"></div></div></main>'
     footer = f'<footer class="bar">{settings_menu(include_view=True)}<span class="status">review changes</span><input id="overall" placeholder="overall note, optional"><button id="changes">request changes</button><button id="approve" class="primary">approve</button></footer>'
-    script = r"""const DATA=""" + data + r""";
+    script = (
+        r"""const DATA="""
+        + data
+        + r""";
 let comments=[],nextCommentId=1,view='split',viewed={
 ...DATA.viewed}
 ;
@@ -1398,6 +1427,7 @@ $('#approve').onclick=()=>send('approve');
 $('#changes').onclick=()=>send('changes');
 render();
 """
+    )
     return page(f"map review: {task}", "review", head, body, footer, script)
 
 
@@ -1438,9 +1468,14 @@ def handler_for(session: PageSession) -> type[BaseHTTPRequestHandler]:
                 length = int(self.headers.get("Content-Length", "0"))
                 payload = json.loads(self.rfile.read(length))
                 if not isinstance(payload, dict):
-                    raise ValueError("feedback must be a json object")
+                    raise TypeError("feedback must be a json object")
                 session.save(payload)
-            except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as error:
+            except (
+                json.JSONDecodeError,
+                TypeError,
+                UnicodeDecodeError,
+                ValueError,
+            ) as error:
                 self.reply(400, str(error).encode(), "text/plain; charset=utf-8")
                 return
             self.reply(200, b"ok", "text/plain; charset=utf-8")
@@ -1499,7 +1534,11 @@ def main() -> None:
             item["hash"] = hashlib.sha1(rows).hexdigest()
         add_context(files)
         viewed = json.loads(viewed_path.read_text(encoding="utf-8")) if viewed_path.exists() else {}
-        serve(render_review(run_dir.name, files, replies, summary, viewed), run_dir / "review-feedback.json", viewed_path)
+        serve(
+            render_review(run_dir.name, files, replies, summary, viewed),
+            run_dir / "review-feedback.json",
+            viewed_path,
+        )
 
 
 if __name__ == "__main__":

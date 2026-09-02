@@ -4,11 +4,18 @@ import json
 import shutil
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent
 STYLE_SOURCE = ROOT / "styles" / "simple-english.md"
 SKILLS_SOURCE = ROOT / "skills"
-SKILL_IGNORES = (".DS_Store", ".pixi", ".pytest_cache", ".ruff_cache", "__pycache__", "*.pyc", "*.pyo")
+SKILL_IGNORES = (
+    ".DS_Store",
+    ".pixi",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+)
 GREEN = "\033[1;32m"
 YELLOW = "\033[1;33m"
 RESET = "\033[0m"
