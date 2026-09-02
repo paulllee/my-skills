@@ -295,7 +295,9 @@ border:1px solid var(--line);
 border-left:2px solid var(--accent);
 background:var(--surface);
 padding:10px;
-margin:6px 0}
+margin:6px 0;
+max-width:100%;
+overflow-wrap:anywhere}
 .comment-card blockquote{
 margin:0;
 color:var(--muted)}
@@ -363,12 +365,25 @@ top:102px;
 width:248px;
 min-width:180px;
 max-width:50vw;
-max-height:calc(100vh - 102px);
+height:calc(100vh - 102px);
 overflow:auto;
-resize:horizontal;
 padding:18px 20px 24px;
 flex:none}
+.tree::after{
+content:"";
+position:absolute;
+top:0;
+right:-6px;
+bottom:0;
+width:12px;
+cursor:col-resize;
+touch-action:none;
+z-index:2}
 .tree #tree-toggle{
+display:block;
+width:100%;
+min-width:0}
+.tree #tree-search{
 display:block;
 width:100%;
 min-width:0}
@@ -376,8 +391,7 @@ min-width:0}
 width:58px;
 min-width:58px;
 padding:18px 8px 24px;
-overflow:hidden;
-resize:none}
+overflow:hidden}
 .tree.closed #tree-toggle{
 height:38px;
 padding:0}
@@ -535,7 +549,8 @@ line-height:1}
 .split.select-old [data-side="new"],.split.select-new [data-side="old"]{
 user-select:none;
 -webkit-user-select:none}
-.split td.code{width:50%}
+.split{table-layout:fixed}
+.split td.code{width:calc(50% - 48px)}
 .split td:nth-child(2){border-right:1px solid var(--line)}
 .split td.empty{background:var(--surface)!important}
 .split td.code.add{background:var(--add)}
@@ -617,7 +632,9 @@ background:var(--hunk);
 border-left:3px solid var(--accent)}
 .note-row td{
 padding:0;
-background:none}
+background:none;
+min-width:0;
+overflow:hidden}
 .viewed{
 gap:5px;
 color:var(--muted);
@@ -1468,6 +1485,40 @@ $('#tree-toggle').onclick=()=>{
 const tree=$('.tree'),closed=tree.classList.toggle('closed');
 $('#tree-toggle').textContent=closed?'>':'files';
 $('#tree-toggle').setAttribute('aria-expanded',String(!closed))};
+{
+const tree=$('.tree');
+let resizing=false,startX=0,startWidth=0,lastWidth=tree.offsetWidth;
+tree.addEventListener('pointerdown',event=>{
+const edge=tree.getBoundingClientRect().right;
+if(Math.abs(event.clientX-edge)>8)return;
+event.preventDefault();
+resizing=true;
+startX=event.clientX;
+startWidth=tree.offsetWidth;
+tree.setPointerCapture(event.pointerId);
+document.body.style.cursor='col-resize';
+document.body.style.userSelect='none'});
+tree.addEventListener('pointermove',event=>{
+if(!resizing)return;
+const width=startWidth+event.clientX-startX;
+if(width<=90){
+tree.classList.add('closed');
+$('#tree-toggle').textContent='>';
+$('#tree-toggle').setAttribute('aria-expanded','false');
+return}
+tree.classList.remove('closed');
+lastWidth=Math.min(width,innerWidth/2);
+tree.style.width=lastWidth+'px';
+$('#tree-toggle').textContent='files';
+$('#tree-toggle').setAttribute('aria-expanded','true')});
+tree.addEventListener('pointerup',event=>{
+if(!resizing)return;
+resizing=false;
+tree.releasePointerCapture(event.pointerId);
+document.body.style.cursor='';
+document.body.style.userSelect=''});
+$('#tree-toggle').addEventListener('click',()=>{
+if(!tree.classList.contains('closed'))tree.style.width=lastWidth+'px'})}
 document.addEventListener('pointerdown',event=>{
 const code=event.target.closest('.split td.code[data-side]');
 $$('.split.select-old,.split.select-new').forEach(split=>split.classList.remove('select-old','select-new'));
