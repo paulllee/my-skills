@@ -1283,19 +1283,38 @@ notes(f.path,line,'old')}
 if(r.kind==='add')return `<tr class="add" data-file="${attr(f.path)}" data-line="${nw}" data-side="new"><td class="ln empty"></td><td class="code empty"></td><td class="ln">${nw}${button('new',nw)}</td><td class="code" data-side="new" data-line="${nw}">${esc(r.text)}</td></tr>${notes(f.path,nw,'new')}`;
 return `<tr class="ctx" data-file="${attr(f.path)}"><td class="ln">${old}${button('old',old)}</td><td class="code" data-side="old" data-line="${old}">${esc(r.text)}</td><td class="ln">${nw}${button('new',nw)}</td><td class="code" data-side="new" data-line="${nw}">${esc(r.text)}</td></tr>${notes(f.path,nw,'new')}`}
 
+function splitRows(rows){
+const pairs=[];
+for(let i=0;i<rows.length;){
+const row=rows[i];
+if(row.kind==='del'||row.kind==='add'){
+const block=[];
+while(i<rows.length&&(rows[i].kind==='del'||rows[i].kind==='add'))block.push(rows[i++]);
+const oldRows=block.filter(row=>row.kind==='del');
+const newRows=block.filter(row=>row.kind==='add');
+const count=Math.max(oldRows.length,newRows.length);
+for(let index=0;index<count;index++){
+const pair={old:oldRows[index]||null,new:newRows[index]||null};
+pair.key=`pair-${pair.old?._key||'blank'}-${pair.new?._key||'blank'}`;
+pairs.push(pair)}
+continue}
+pairs.push({old:row,new:row,key:row._key});
+i++}
+return pairs}
+
 function paneRowHtml(f,r,side,rowKey){
+if(!r)return `<tr class="pane-empty" data-file="${attr(f.path)}" data-row-key="${rowKey}"><td class="ln empty"></td><td class="code empty"></td></tr>`;
 if(r.kind==='hunk')return `<tr class="hunk" data-row-key="${rowKey}"${side==='new'?' aria-hidden="true"':''}><td colspan="2">${esc(r.text)}</td></tr>`;
 if(r.kind==='fold')return `<tr class="fold${side==='old'?' pane-spacer':''}" data-file="${attr(f.path)}" data-fold="${r.fold}" data-row-key="${rowKey}"${side==='old'?' aria-hidden="true"':''}><td colspan="2">${side==='new'?foldControls(r):''}</td></tr>`;
 const line=side==='old'?r.old:r.new;
-const exists=r.kind==='ctx'||(side==='old'&&r.kind==='del')||(side==='new'&&r.kind==='add');
-if(!exists)return `<tr class="pane-empty" data-file="${attr(f.path)}" data-row-key="${rowKey}"><td class="ln empty"></td><td class="code empty"></td></tr>`;
 const button=`<button class="cbtn" title="comment" data-side="${side}" data-line="${line}">+</button>`;
 return `<tr class="${r.kind}" data-file="${attr(f.path)}" data-line="${line}" data-side="${side}" data-row-key="${rowKey}"><td class="ln">${line}${button}</td><td class="code" data-side="${side}" data-line="${line}">${esc(r.text)}</td></tr>`}
 
 function paneRowsHtml(f,side){
-return f.rows.map(row=>{
-const base=paneRowHtml(f,row,side,row._key);
-const replies=rowReplies(f.path,row).map(item=>item.side===side
+return splitRows(f.rows).map(pair=>{
+const base=paneRowHtml(f,pair[side],side,pair.key);
+const rows=pair.old===pair.new?[pair.old]:[pair.old,pair.new].filter(Boolean);
+const replies=rows.flatMap(row=>rowReplies(f.path,row)).map(item=>item.side===side
 ?`<tr class="note-row" data-row-key="reply-${item.index}"><td colspan="2">${threadHtml(item.reply,f.path,item.line,item.side)}</td></tr>`
 :`<tr class="note-row pane-spacer" data-row-key="reply-${item.index}" aria-hidden="true"><td colspan="2"></td></tr>`).join('');
 return base+replies}).join('')}
