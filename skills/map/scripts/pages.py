@@ -365,7 +365,7 @@ top:102px;
 width:248px;
 min-width:180px;
 max-width:50vw;
-max-height:calc(100vh - 102px);
+max-height:calc(100vh - 102px - 90px);
 overflow:auto;
 padding:18px 20px 24px;
 flex:none}
