@@ -475,7 +475,7 @@ font-size:11px}
 .file h2 .file-note{
 height:28px;
 padding:0 14px}
-.file.closed table{
+.file.closed table,.file.closed .split-panes{
 display:none}
 .file.closed .file-threads{
 display:none}
@@ -531,11 +531,14 @@ border-radius:4px;
 padding:0;
 font-size:14px;
 line-height:1}
-.split td.code{
-width:50%}
-.split.select-old td.code[data-side="new"],.split.select-new td.code[data-side="old"]{
+.split-panes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.split-pane{min-width:0}
+.split-pane.old-pane{border-right:1px solid var(--line)}
+.split-panes.select-old .new-pane,.split-panes.select-new .old-pane{
 user-select:none;
 -webkit-user-select:none}
+.split-panes td.code{width:100%}
+.pane-spacer td{padding:0}
 .cbtn{
 position:absolute;
 inset:0;
@@ -994,6 +997,8 @@ def render_review(task: str, files: list[dict], replies: list[dict], summary: li
 let comments=[],nextCommentId=1,view='split',viewed={
 ...DATA.viewed}
 ;
+let nextLogicalRowId=1;
+DATA.files.forEach(file=>file.rows.forEach(row=>row._key=`row-${nextLogicalRowId++}`));
 const esc=s=>{
 const d=document.createElement('div');
 d.textContent=s;
@@ -1005,7 +1010,9 @@ const commentViews=new Map();
 const collapsedThreads=new Set(),resolvedThreads=new Set();
 const currentRound=Math.max(1,DATA.summary.length);
 let dragStart=null,dragRows=[];
-let textSelectionSide=null,textSelectionTable=null;
+let splitResizeObserver=null,splitSyncFrame=0;
+const pendingSplitSync=new Map();
+let textSelectionPane=null,adjustingTextSelection=false;
 
 function threadKey(reply){return DATA.replies.indexOf(reply)}
 
@@ -1023,6 +1030,13 @@ return `<div class="${classes}" data-thread="${key}"><div class="thread-actions"
 function notes(file,line,side){
 return DATA.replies.filter(r=>r.file===file&&+r.line===+line&&(r.side||'new')===side).map(r=>`<tr class="note-row">${reviewCells(side,threadHtml(r,file,line,side))}</tr>`).join('')}
 
+function rowReplies(file,row){
+const locations=[];
+if(row.kind==='ctx')locations.push(['old',row.old],['new',row.new]);
+else if(row.kind==='del')locations.push(['old',row.old]);
+else if(row.kind==='add')locations.push(['new',row.new]);
+return locations.flatMap(([side,line])=>DATA.replies.map((reply,index)=>({reply,index,side,line})).filter(item=>item.reply.file===file&&+item.reply.line===+line&&(item.reply.side||'new')===side))}
+
 function fileThreads(file){
 const replies=DATA.replies.filter(r=>r.file===file&&+r.line===0&&(r.side||'file')==='file');
 if(!replies.length)return '';
@@ -1030,9 +1044,9 @@ return `<div class="file-threads">${replies.map(r=>threadHtml(r,file,0,'file')).
 
 function targetsBetween(first,last){
 if(!first||!last||data(first,'side')!==data(last,'side'))return [];
-const file=first.closest('.file');
-if(file!==last.closest('.file'))return [];
-const targets=$$(`td.code[data-side="${data(first,'side')}"]`,file);
+const scope=first.closest('.split-pane')||first.closest('.file');
+if(!scope||scope!==(last.closest('.split-pane')||last.closest('.file')))return [];
+const targets=$$(`td.code[data-side="${data(first,'side')}"]`,scope);
 let start=targets.indexOf(first),end=targets.indexOf(last);
 if(start>end)[start,end]=[end,start];
 return targets.slice(start,end+1)}
@@ -1050,7 +1064,7 @@ function removeReviewComment(id){
 const view=commentViews.get(id);
 unwrapMarks(view?.marks);
 view?.targets.forEach(target=>target.classList.remove('selected-side'));
-$(`[data-comment-id="${id}"]`)?.remove();
+$$(`[data-comment-id="${id}"]`).forEach(element=>element.remove());
 commentViews.delete(id);
 comments=comments.filter(comment=>comment.id!==id&&comment.thread!==id)}
 
@@ -1078,8 +1092,7 @@ if(!targets.length)return;
 targets.forEach(target=>target.classList.add('selected-side'));
 commentViews.set(comment.id,{targets,marks:[]});
 const card=localThreadHtml(comment,'remove-draft');
-last.closest('tr').insertAdjacentHTML('afterend',`<tr class="draft-note" data-comment-id="${comment.id}">${reviewCells(comment.side,card)}</tr>`);
-const draft=$(`.draft-note[data-comment-id="${comment.id}"]`);
+const draft=insertReviewRow(last.closest('tr'),comment.side,card,'draft-note',comment.id);
 bindLocalThread(draft,comment)})}
 
 function restoreFileComments(){
@@ -1150,9 +1163,25 @@ else if(event.key==='Escape')pending.remove()};
 textarea.focus()}
 
 function reviewCells(side,content){
-if(view==='inline')return `<td colspan="4">${content}</td>`;
-if(side==='old')return `<td colspan="2">${content}</td><td colspan="2"></td>`;
-return `<td colspan="2"></td><td colspan="2">${content}</td>`}
+return `<td colspan="4">${content}</td>`}
+
+function insertReviewRow(afterRow,side,content,className,commentId=''){
+if(view==='inline'){
+afterRow.insertAdjacentHTML('afterend',`<tr class="${className}" data-comment-id="${commentId}">${reviewCells(side,content)}</tr>`);
+return afterRow.nextElementSibling}
+const section=afterRow.closest('.file'),rowKey=data(afterRow,'row-key');
+const pairKey=`comment-${commentId||nextCommentId}`,otherSide=side==='old'?'new':'old';
+const other=$(`.${otherSide}-pane tr[data-row-key="${attr(rowKey)}"]`,section);
+afterRow.insertAdjacentHTML('afterend',`<tr class="${className}" data-row-key="${pairKey}" data-comment-id="${commentId}"><td colspan="2">${content}</td></tr>`);
+other?.insertAdjacentHTML('afterend',`<tr class="${className} pane-spacer" data-row-key="${pairKey}" data-comment-id="${commentId}" aria-hidden="true"><td colspan="2"></td></tr>`);
+scheduleSplitSync(section,true);
+return afterRow.nextElementSibling}
+
+function removeReviewRow(row){
+const rowKey=data(row,'row-key'),section=row.closest('.file');
+if(!rowKey){row.remove();return}
+$$(`tr[data-row-key="${rowKey}"]`,section).forEach(item=>item.remove());
+scheduleSplitSync(section,true)}
 
 function saveReviewComment(targets,marks,quote,text){
 const first=targets[0],last=targets.at(-1),id=nextCommentId++;
@@ -1169,8 +1198,7 @@ marks.forEach(mark=>mark.dataset.commentId=id);
 commentViews.set(id,{targets,marks});
 const preview=quote?`<pre class="comment-preview">${esc(quote.slice(0,400))}</pre>`:'';
 const card=`<div class="comment-thread"><div class="comment-card"><span class="comment-author">you</span>${preview}<p>${esc(text)}</p><button class="reply-local">reply</button><button class="remove-draft" data-comment-id="${id}">remove</button></div></div>`;
-lastRow.insertAdjacentHTML('afterend',`<tr class="draft-note" data-comment-id="${id}">${reviewCells(side,card)}</tr>`);
-const draft=$(`.draft-note[data-comment-id="${id}"]`),thread=$('.comment-thread',draft);
+const draft=insertReviewRow(lastRow,side,card,'draft-note',id),thread=$('.comment-thread',draft);
 $('.reply-local',draft).onclick=()=>openThreadReply(thread,text,{file:comment.file,line:comment.line,side:comment.side,thread:id,round:currentRound},draft);
 $(`.remove-draft[data-comment-id="${id}"]`).onclick=()=>removeReviewComment(id)}
 
@@ -1180,17 +1208,16 @@ $('.pending-note .cancel')?.click();
 const side=data(targets[0],'side'),lastRow=targets.at(-1).closest('tr');
 const preview=quote?`<pre class="comment-preview">${esc(quote.slice(0,400))}</pre>`:'';
 const editor=`<div class="comment-card">${preview}<textarea placeholder="leave a note on this selection"></textarea><div class="row"><button class="cancel">cancel</button><button class="primary save">save</button></div></div>`;
-lastRow.insertAdjacentHTML('afterend',`<tr class="draft-note pending-note">${reviewCells(side,editor)}</tr>`);
-const pending=$('.pending-note');
+const pending=insertReviewRow(lastRow,side,editor,'draft-note pending-note');
 const cancel=()=>{
 clearDrag();
 unwrapMarks(marks);
-pending.remove()};
+removeReviewRow(pending)};
 $('.cancel',pending).onclick=cancel;
 $('.save',pending).onclick=()=>{
 const text=$('textarea',pending).value.trim();
 if(!text)return;
-pending.remove();
+removeReviewRow(pending);
 clearDrag();
 saveReviewComment(targets,marks,quote,text)};
 $('textarea',pending).onkeydown=e=>{
@@ -1251,6 +1278,51 @@ notes(f.path,line,'old')}
 if(r.kind==='add')return `<tr class="add" data-file="${attr(f.path)}" data-line="${nw}" data-side="new"><td class="ln empty"></td><td class="code empty"></td><td class="ln">${nw}${button('new',nw)}</td><td class="code" data-side="new" data-line="${nw}">${esc(r.text)}</td></tr>${notes(f.path,nw,'new')}`;
 return `<tr class="ctx" data-file="${attr(f.path)}"><td class="ln">${old}${button('old',old)}</td><td class="code" data-side="old" data-line="${old}">${esc(r.text)}</td><td class="ln">${nw}${button('new',nw)}</td><td class="code" data-side="new" data-line="${nw}">${esc(r.text)}</td></tr>${notes(f.path,nw,'new')}`}
 
+function paneRowHtml(f,r,side,rowKey){
+if(r.kind==='hunk')return `<tr class="hunk" data-row-key="${rowKey}"${side==='new'?' aria-hidden="true"':''}><td colspan="2">${esc(r.text)}</td></tr>`;
+if(r.kind==='fold')return `<tr class="fold" data-file="${attr(f.path)}" data-fold="${r.fold}" data-row-key="${rowKey}"><td colspan="2">${foldControls(r)}</td></tr>`;
+const line=side==='old'?r.old:r.new;
+const exists=r.kind==='ctx'||(side==='old'&&r.kind==='del')||(side==='new'&&r.kind==='add');
+if(!exists)return `<tr class="${r.kind} pane-empty" data-file="${attr(f.path)}" data-row-key="${rowKey}"><td class="ln empty"></td><td class="code empty"></td></tr>`;
+const button=`<button class="cbtn" title="comment" data-side="${side}" data-line="${line}">+</button>`;
+return `<tr class="${r.kind}" data-file="${attr(f.path)}" data-line="${line}" data-side="${side}" data-row-key="${rowKey}"><td class="ln">${line}${button}</td><td class="code" data-side="${side}" data-line="${line}">${esc(r.text)}</td></tr>`}
+
+function paneRowsHtml(f,side){
+return f.rows.map(row=>{
+const base=paneRowHtml(f,row,side,row._key);
+const replies=rowReplies(f.path,row).map(item=>item.side===side
+?`<tr class="note-row" data-row-key="reply-${item.index}"><td colspan="2">${threadHtml(item.reply,f.path,item.line,item.side)}</td></tr>`
+:`<tr class="note-row pane-spacer" data-row-key="reply-${item.index}" aria-hidden="true"><td colspan="2"></td></tr>`).join('');
+return base+replies}).join('')}
+
+function splitFileHtml(f){
+return `<div class="split-panes"><table class="split-pane old-pane"><tbody>${paneRowsHtml(f,'old')}</tbody></table><table class="split-pane new-pane"><tbody>${paneRowsHtml(f,'new')}</tbody></table></div>`}
+
+function syncSplitRows(section,reset=false){
+const panes=$$('.split-pane',section);
+if(panes.length!==2)return;
+$$('tr[data-row-key]',panes[0]).forEach(row=>{
+const pair=$(`tr[data-row-key="${data(row,'row-key')}"]`,panes[1]);
+if(!pair)return;
+if(reset)row.style.height=pair.style.height='';
+const height=Math.max(row.getBoundingClientRect().height,pair.getBoundingClientRect().height);
+if(Math.abs(row.getBoundingClientRect().height-height)>.5)row.style.height=`${height}px`;
+if(Math.abs(pair.getBoundingClientRect().height-height)>.5)pair.style.height=`${height}px`})}
+
+function scheduleSplitSync(section,reset=false){
+pendingSplitSync.set(section,reset||pendingSplitSync.get(section)||false);
+if(splitSyncFrame)return;
+splitSyncFrame=requestAnimationFrame(()=>{
+pendingSplitSync.forEach((shouldReset,target)=>syncSplitRows(target,shouldReset));
+pendingSplitSync.clear();
+splitSyncFrame=0})}
+
+function observeSplitRows(){
+splitResizeObserver?.disconnect();
+splitResizeObserver=new ResizeObserver(entries=>{
+new Set(entries.map(entry=>entry.target.closest('.file')).filter(Boolean)).forEach(section=>scheduleSplitSync(section,true))});
+$$('.split-pane').forEach(pane=>splitResizeObserver.observe(pane))}
+
 function fileTree(files){
 const root={dirs:new Map(),files:[]};
 files.forEach((file,index)=>{
@@ -1293,11 +1365,7 @@ attr(f.path)}
 viewed[f.path]===f.hash?'checked':''}
 >viewed</label><button class="file-note" data-file="${
 attr(f.path)}
-">comment</button></h2>${fileThreads(f.path)}<table class="${
-view}
-">${
-f.rows.map(r=>rowHtml(f,r)).join('')}
-</table></section>`}
+">comment</button></h2>${fileThreads(f.path)}${view==='inline'?`<table class="inline">${f.rows.map(r=>rowHtml(f,r)).join('')}</table>`:splitFileHtml(f)}</section>`}
 ).join('');
 $('.summary').innerHTML=DATA.summary.length?'<h2>what changed</h2>'+DATA.summary.map((s,i)=>`<details ${
 i===DATA.summary.length-1?'open':''}
@@ -1311,7 +1379,11 @@ esc(s)}
 restoreReviewComments();
 restoreFileComments();
 restoreSummaryComments();
-bind()}
+bind();
+if(view==='split'){
+$$('.file').forEach(section=>syncSplitRows(section,true));
+observeSplitRows()}
+else splitResizeObserver?.disconnect()}
 
 function setCollapsed(section,collapsed){
 section.classList.toggle('closed',collapsed);
@@ -1324,7 +1396,9 @@ const collapsed=!thread.classList.contains('collapsed');
 thread.classList.toggle('collapsed',collapsed);
 button.textContent=collapsed?'expand':'collapse';
 if(collapsed)collapsedThreads.add(key);
-else collapsedThreads.delete(key)});
+else collapsedThreads.delete(key);
+const section=thread.closest('.file');
+if(section)scheduleSplitSync(section,true)});
 $$('.resolve-thread').forEach(button=>button.onclick=()=>{
 const thread=button.closest('.comment-thread'),key=+thread.dataset.thread;
 resolvedThreads.add(key);
@@ -1356,24 +1430,22 @@ const x=button.closest('.fold');
 const f=DATA.files.find(y=>y.path===data(x,'file'));
 const r=f.rows.find(y=>+y.fold===+data(x,'fold'));
 const count=Math.min(12,r.lines.length);
-let start,chunk,position;
+let start,chunk,insertAt;
 if(button.dataset.expand==='down'){
 start=r.start;
 chunk=r.lines.splice(0,count);
 r.start+=count;
-position='beforebegin'}
+insertAt=f.rows.indexOf(r)}
 else{
 start=r.end-count;
 chunk=r.lines.splice(-count);
 r.end-=count;
-position='afterend'}
-const html=chunk.map((text,i)=>rowHtml(f,{
-kind:'ctx',old:start+i+(r.off||0),new:start+i,text}
-)).join('');
-x.insertAdjacentHTML(position,html);
-if(r.lines.length)x.outerHTML=rowHtml(f,r);
-else x.remove();
-bind()}
+insertAt=f.rows.indexOf(r)+1}
+const expanded=chunk.map((text,i)=>({kind:'ctx',old:start+i+(r.off||0),new:start+i,text,_key:`row-${nextLogicalRowId++}`}));
+f.rows.splice(insertAt,0,...expanded);
+if(!r.lines.length)f.rows.splice(f.rows.indexOf(r),1);
+$('.pending-note .cancel')?.click();
+render()}
 );
 $$('.reply').forEach(b=>b.onclick=()=>{
 const r=DATA.replies[+b.dataset.reply];
@@ -1418,23 +1490,33 @@ const tree=$('.tree'),closed=tree.classList.toggle('closed');
 $('#tree-toggle').textContent=closed?'>':'files';
 $('#tree-toggle').setAttribute('aria-expanded',String(!closed))};
 document.addEventListener('pointerdown',event=>{
-const code=event.target.closest('table.split td.code[data-side]');
-textSelectionSide=null;
-textSelectionTable=null;
+const code=event.target.closest('.split-pane td.code[data-side]');
+textSelectionPane=null;
 if(!code)return;
-const table=code.closest('table');
-textSelectionSide=data(code,'side');
-textSelectionTable=table;
-table.classList.add(data(code,'side')==='old'?'select-old':'select-new')});
+textSelectionPane=code.closest('.split-pane');
+const split=code.closest('.split-panes');
+split.classList.add(data(code,'side')==='old'?'select-old':'select-new')});
 document.addEventListener('selectionchange',()=>{
-if(!textSelectionSide)return;
+if(!textSelectionPane||adjustingTextSelection)return;
 const selection=getSelection();
-if(!selection.rangeCount)return;
+if(!selection.rangeCount||selection.isCollapsed)return;
 const focusNode=selection.focusNode;
 const focusElement=focusNode?.nodeType===Node.TEXT_NODE?focusNode.parentElement:focusNode;
-const focusCode=focusElement?.closest?.('td.code[data-side]');
-const focusSide=focusCode?data(focusCode,'side'):null;
-if(focusSide!==textSelectionSide||focusCode.closest('table')!==textSelectionTable)selection.removeAllRanges()});
+if(focusElement?.closest?.('.split-pane')===textSelectionPane)return;
+const focusRow=focusElement?.closest?.('tr[data-row-key]');
+const rowKey=focusRow?data(focusRow,'row-key'):'';
+const side=textSelectionPane.classList.contains('old-pane')?'old':'new';
+const cell=rowKey?$(`tr[data-row-key="${rowKey}"] td.code[data-side="${side}"]`,textSelectionPane):null;
+if(!cell){selection.removeAllRanges();return}
+const walker=document.createTreeWalker(cell,NodeFilter.SHOW_TEXT);
+const nodes=[];
+for(let node=walker.nextNode();node;node=walker.nextNode())nodes.push(node);
+if(!nodes.length){selection.removeAllRanges();return}
+const focusFollows=textSelectionPane.compareDocumentPosition(focusElement)&Node.DOCUMENT_POSITION_FOLLOWING;
+const boundary=focusFollows?nodes.at(-1):nodes[0],offset=focusFollows?boundary.length:0;
+adjustingTextSelection=true;
+selection.setBaseAndExtent(selection.anchorNode,selection.anchorOffset,boundary,offset);
+adjustingTextSelection=false});
 document.addEventListener('pointermove',event=>{
 if(!dragStart)return;
 const gutter=event.target.closest('td.ln'),button=gutter?.querySelector('.cbtn');
@@ -1442,7 +1524,7 @@ if(!button||data(button,'side')!==data(dragStart,'side'))return;
 const target=$(`.code[data-side="${data(button,'side')}"]`,gutter.closest('tr'));
 if(target&&targetsBetween(dragStart,target).length)showDrag(dragStart,target)});
 const clearSplitSelection=()=>{
-$$('table.select-old,table.select-new').forEach(table=>table.classList.remove('select-old','select-new'))};
+$$('.split-panes.select-old,.split-panes.select-new').forEach(split=>split.classList.remove('select-old','select-new'))};
 const cancelPointerSelection=()=>{
 dragStart=null;
 clearDrag();
