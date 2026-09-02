@@ -1004,6 +1004,7 @@ const data=(element,name)=>(element.dataset[name]||'').trim();
 const commentViews=new Map();
 const collapsedThreads=new Set(),resolvedThreads=new Set();
 const currentRound=Math.max(1,DATA.summary.length);
+let dragStart=null,dragRows=[];
 
 function threadKey(reply){return DATA.replies.indexOf(reply)}
 
@@ -1034,6 +1035,15 @@ const targets=$$(`td.code[data-side="${data(first,'side')}"]`,file);
 let start=targets.indexOf(first),end=targets.indexOf(last);
 if(start>end)[start,end]=[end,start];
 return targets.slice(start,end+1)}
+
+function clearDrag(){
+dragRows.forEach(target=>target.classList.remove('selected-side'));
+dragRows=[]}
+
+function showDrag(first,last){
+clearDrag();
+dragRows=targetsBetween(first,last);
+dragRows.forEach(target=>target.classList.add('selected-side'))}
 
 function removeReviewComment(id){
 const view=commentViews.get(id);
@@ -1172,6 +1182,7 @@ const editor=`<div class="comment-card">${preview}<textarea placeholder="leave a
 lastRow.insertAdjacentHTML('afterend',`<tr class="draft-note pending-note">${reviewCells(side,editor)}</tr>`);
 const pending=$('.pending-note');
 const cancel=()=>{
+clearDrag();
 unwrapMarks(marks);
 pending.remove()};
 $('.cancel',pending).onclick=cancel;
@@ -1179,6 +1190,7 @@ $('.save',pending).onclick=()=>{
 const text=$('textarea',pending).value.trim();
 if(!text)return;
 pending.remove();
+clearDrag();
 saveReviewComment(targets,marks,quote,text)};
 $('textarea',pending).onkeydown=e=>{
 if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){
@@ -1334,11 +1346,10 @@ treeFile?.classList.remove('viewed-file');
 setCollapsed(section,false)}}
 );
 $$('.file-note').forEach(b=>b.onclick=()=>commentOnFile(b));
-$$('.cbtn').forEach(b=>b.onclick=e=>{
+$$('.cbtn').forEach(b=>b.onpointerdown=e=>{
 e.preventDefault();
-const target=$(`.code[data-side="${data(b,'side')}"]`,b.closest('tr'));
-if(!target)return;
-commentOnTargets([target],[],(target.textContent||'').trim())});
+dragStart=$(`.code[data-side="${data(b,'side')}"]`,b.closest('tr'));
+if(dragStart)showDrag(dragStart,dragStart)});
 $$('.fold [data-expand]').forEach(button=>button.onclick=()=>{
 const x=button.closest('.fold');
 const f=DATA.files.find(y=>y.path===data(x,'file'));
@@ -1410,10 +1421,41 @@ const code=event.target.closest('table.split td.code[data-side]');
 if(!code)return;
 const table=code.closest('table');
 table.classList.add(data(code,'side')==='old'?'select-old':'select-new')});
-document.addEventListener('pointerup',()=>{
-$$('table.select-old,table.select-new').forEach(table=>table.classList.remove('select-old','select-new'))});
-document.addEventListener('pointercancel',()=>{
-$$('table.select-old,table.select-new').forEach(table=>table.classList.remove('select-old','select-new'))});
+document.addEventListener('pointermove',event=>{
+if(!dragStart)return;
+const gutter=event.target.closest('td.ln'),button=gutter?.querySelector('.cbtn');
+if(!button||data(button,'side')!==data(dragStart,'side'))return;
+const target=$(`.code[data-side="${data(button,'side')}"]`,gutter.closest('tr'));
+if(target&&targetsBetween(dragStart,target).length)showDrag(dragStart,target)});
+const clearSplitSelection=()=>{
+$$('table.select-old,table.select-new').forEach(table=>table.classList.remove('select-old','select-new'))};
+const cancelPointerSelection=()=>{
+dragStart=null;
+clearDrag();
+clearSplitSelection()};
+document.addEventListener('pointerup',event=>{
+if(dragStart){
+const targets=[...dragRows];
+dragStart=null;
+const quote=targets.map(target=>target.textContent||'').join('\n').trim();
+commentOnTargets(targets,[],quote);
+clearSplitSelection();
+return}
+if(!event.target.closest('button,.composer,.draft-note')){
+const selection=getSelection(),quote=selection.toString().trim();
+if(quote&&selection.rangeCount){
+const range=selection.getRangeAt(0);
+const startNode=range.startContainer.nodeType===Node.TEXT_NODE?range.startContainer.parentElement:range.startContainer;
+const endNode=range.endContainer.nodeType===Node.TEXT_NODE?range.endContainer.parentElement:range.endContainer;
+const start=startNode.closest?.('td.code[data-side]'),end=endNode.closest?.('td.code[data-side]');
+const targets=targetsBetween(start,end);
+if(targets.length){
+const marks=markRange(range);
+selection.removeAllRanges();
+commentOnTargets(targets,marks,quote)}}}
+clearSplitSelection()});
+document.addEventListener('pointercancel',cancelPointerSelection);
+addEventListener('blur',cancelPointerSelection);
 $$('[data-view]').forEach(b=>b.onclick=()=>{
 view=b.dataset.view;
 $$('[data-view]').forEach(x=>x.classList.toggle('on',x===b));
