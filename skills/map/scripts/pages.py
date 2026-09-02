@@ -366,7 +366,7 @@ width:248px;
 min-width:180px;
 max-width:50vw;
 max-height:calc(100vh - 102px - 90px);
-overflow:auto;
+overflow:visible;
 padding:18px 20px 24px;
 flex:none}
 .tree::after{
@@ -387,6 +387,9 @@ min-width:0}
 display:block;
 width:100%;
 min-width:0}
+.tree-body{
+max-height:calc(100vh - 102px - 90px - 80px);
+overflow:auto}
 .tree.closed{
 width:58px;
 min-width:58px;
